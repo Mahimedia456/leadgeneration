@@ -14,8 +14,6 @@ import {
   UserRoundSearch,
   BarChart3,
   Settings,
-  UserCircle2,
-  Shield,
   Search,
   Bell,
   LogOut,
@@ -23,6 +21,7 @@ import {
   Activity,
   X,
   BriefcaseBusiness,
+  Menu,
 } from "lucide-react";
 
 const navGroups = [
@@ -54,18 +53,17 @@ const navGroups = [
   {
     label: "Administration",
     items: [
-     
       { to: "/workspaces", label: "Workspaces", icon: BriefcaseBusiness },
       { to: "/settings", label: "Settings", icon: Settings },
-      
     ],
   },
 ];
 
-function SidebarItem({ to, label, icon: Icon }) {
+function SidebarItem({ to, label, icon: Icon, onClick }) {
   return (
     <NavLink
       to={to}
+      onClick={onClick}
       className={({ isActive }) =>
         isActive ? "app-nav-item app-nav-item-active" : "app-nav-item"
       }
@@ -79,6 +77,7 @@ function SidebarItem({ to, label, icon: Icon }) {
 export default function AppShell({ children }) {
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const notifications = [
     {
@@ -98,85 +97,134 @@ export default function AppShell({ children }) {
     },
   ];
 
+  const closeMobileSidebar = () => setMobileSidebarOpen(false);
+
+  const renderSidebar = (isMobile = false) => (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-slate-200 px-6 py-6 dark:border-[#26262a]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="sidebar-brand-logo-wrap h-11 w-11">
+              <img
+                src={logo}
+                alt="Mahimedia"
+                className="h-7 w-7 object-contain"
+              />
+            </div>
+
+            <div>
+              <p className="text-[17px] font-extrabold">Mahimedia Solutions</p>
+              <p className="text-xs text-slate-500">Suite</p>
+            </div>
+          </div>
+
+          {isMobile && (
+            <button
+              type="button"
+              onClick={closeMobileSidebar}
+              className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.03]"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="custom-scrollbar flex-1 overflow-y-auto px-3 py-6">
+        <div className="space-y-6">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                {group.label}
+              </p>
+
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <SidebarItem
+                    key={item.to}
+                    {...item}
+                    onClick={isMobile ? closeMobileSidebar : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-slate-200 px-3 py-4 dark:border-[#26262a]">
+        <button
+          onClick={() => {
+            closeMobileSidebar();
+            navigate("/login");
+          }}
+          className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.03]"
+        >
+          <LogOut size={18} />
+          Log Out
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="app-shell-bg flex h-screen overflow-hidden text-slate-900 dark:text-slate-100">
       <aside className="app-sidebar hidden h-screen w-[250px] shrink-0 flex-col lg:flex">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-slate-200 px-6 py-6 dark:border-[#26262a]">
-            <div className="flex items-center gap-3">
-              <div className="sidebar-brand-logo-wrap h-11 w-11">
-                <img
-                  src={logo}
-                  alt="Mahimedia"
-                  className="h-7 w-7 object-contain"
-                />
-              </div>
+        {renderSidebar(false)}
+      </aside>
 
-              <div>
-                <p className="text-[17px] font-extrabold">Mahimedia Solutions</p>
-                <p className="text-xs text-slate-500">Suite</p>
-              </div>
-            </div>
-          </div>
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={closeMobileSidebar}
+        />
+      )}
 
-          <div className="custom-scrollbar flex-1 overflow-y-auto px-3 py-6">
-            <div className="space-y-6">
-              {navGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                    {group.label}
-                  </p>
-
-                  <div className="space-y-1">
-                    {group.items.map((item) => (
-                      <SidebarItem key={item.to} {...item} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 px-3 py-4 dark:border-[#26262a]">
-          
-
-            <button
-              onClick={() => navigate("/login")}
-              className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.03]"
-            >
-              <LogOut size={18} />
-              Log Out
-            </button>
-          </div>
-        </div>
+      <aside
+        className={`app-sidebar fixed left-0 top-0 z-50 h-screen w-[280px] shrink-0 flex-col lg:hidden ${
+          mobileSidebarOpen ? "flex" : "hidden"
+        }`}
+      >
+        {renderSidebar(true)}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="app-topbar sticky top-0 z-30 flex items-center justify-between px-8 py-5">
-          <div className="relative w-full max-w-[650px]">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-            />
+        <header className="app-topbar sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="topbar-action-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-full lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu size={18} />
+            </button>
 
-            <input
-              type="text"
-              placeholder="Search campaigns, users, or data..."
-              className="auth-minimal-input w-full rounded-2xl py-3 pl-11 pr-4 text-sm"
-            />
+            <div className="relative min-w-0 flex-1 max-w-[650px]">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+              />
+
+              <input
+                type="text"
+                placeholder="Search campaigns, users, or data..."
+                className="auth-minimal-input w-full rounded-2xl py-3 pl-11 pr-4 text-sm"
+              />
+            </div>
           </div>
 
-          <div className="ml-6 flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="topbar-action-btn h-11 w-11 rounded-full"
+              className="topbar-action-btn flex h-11 w-11 items-center justify-center rounded-full"
             >
               <Bell size={18} />
             </button>
 
             <button
               onClick={() => navigate("/activity-logs")}
-              className="topbar-action-btn h-11 w-11 rounded-full"
+              className="topbar-action-btn hidden h-11 w-11 items-center justify-center rounded-full sm:flex"
             >
               <Activity size={18} />
             </button>
@@ -198,7 +246,7 @@ export default function AppShell({ children }) {
               </div>
             </div>
 
-            <button className="blue-gradient-btn hidden items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white lg:flex">
+            <button className="blue-gradient-btn hidden items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white xl:flex">
               <Plus size={16} />
               New Campaign
             </button>
@@ -206,7 +254,7 @@ export default function AppShell({ children }) {
         </header>
 
         {showNotifications && (
-          <div className="fixed right-6 top-[80px] z-50 w-[360px] rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-[#26262a] dark:bg-[#161618]">
+          <div className="fixed right-4 top-[78px] z-50 w-[calc(100vw-2rem)] max-w-[360px] rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-[#26262a] dark:bg-[#161618] sm:right-6 sm:top-[82px]">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-[#26262a]">
               <p className="font-bold">Notifications</p>
 
@@ -242,7 +290,7 @@ export default function AppShell({ children }) {
           </div>
         )}
 
-        <main className="custom-scrollbar flex-1 overflow-y-auto px-8 py-8">
+        <main className="custom-scrollbar flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>
