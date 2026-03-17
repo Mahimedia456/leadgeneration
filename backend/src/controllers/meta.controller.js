@@ -15,7 +15,7 @@ const META_SCOPES = [
 ];
 
 function getUserId(req) {
-  return req.user?.sub || req.user?.id;
+  return req.user?.sub || req.user?.id || null;
 }
 
 function buildOAuthUrl() {
@@ -29,9 +29,10 @@ function buildOAuthUrl() {
 
 async function graph(path, params = {}) {
   const url = new URL(`https://graph.facebook.com/${env.metaApiVersion}/${path}`);
+
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, value);
+      url.searchParams.set(key, String(value));
     }
   });
 
@@ -90,14 +91,13 @@ async function syncConnectionAssets({ connectionId, userToken }) {
       last_synced_at: new Date().toISOString(),
     };
 
-    await supabase
+    const { error: pageUpsertError } = await supabase
       .from("meta_pages")
       .upsert(pagePayload, { onConflict: "page_id" });
 
-    let followersCount = 0;
-    let mediaCount = 0;
-    let username = "";
-    let igBusinessId = page.instagram_business_account?.id || null;
+    if (pageUpsertError) throw pageUpsertError;
+
+    const igBusinessId = page.instagram_business_account?.id || null;
 
     if (igBusinessId) {
       try {
@@ -106,30 +106,30 @@ async function syncConnectionAssets({ connectionId, userToken }) {
           access_token: page.access_token,
         });
 
-        followersCount = Number(ig.followers_count || 0);
-        mediaCount = Number(ig.media_count || 0);
-        username = ig.username || "";
+        const { error: igUpsertError } = await supabase
+          .from("meta_instagram_accounts")
+          .upsert(
+            {
+              connection_id: connectionId,
+              page_id: String(page.id),
+              ig_user_id: String(ig.id),
+              username: ig.username || "",
+              followers_count: Number(ig.followers_count || 0),
+              media_count: Number(ig.media_count || 0),
+              status: "connected",
+              last_synced_at: new Date().toISOString(),
+            },
+            { onConflict: "ig_user_id" }
+          );
 
-        await supabase.from("meta_instagram_accounts").upsert(
-          {
-            connection_id: connectionId,
-            page_id: String(page.id),
-            ig_user_id: String(ig.id),
-            username,
-            followers_count: followersCount,
-            media_count: mediaCount,
-            status: "connected",
-            last_synced_at: new Date().toISOString(),
-          },
-          { onConflict: "ig_user_id" }
-        );
+        if (igUpsertError) throw igUpsertError;
       } catch (_err) {
-        // ignore IG read failures for now
+        // ignore IG detail fetch failures for now
       }
     }
   }
 
-  await supabase
+  const { error: connectionUpdateError } = await supabase
     .from("meta_connections")
     .update({
       meta_user_id: String(me.id),
@@ -138,6 +138,8 @@ async function syncConnectionAssets({ connectionId, userToken }) {
       last_synced_at: new Date().toISOString(),
     })
     .eq("id", connectionId);
+
+  if (connectionUpdateError) throw connectionUpdateError;
 
   return { me, pages: pageItems };
 }
@@ -162,10 +164,14 @@ export async function getMetaOAuthUrl(_req, res, next) {
 export async function exchangeMetaCode(req, res, next) {
   try {
     const userId = getUserId(req);
-    const { code } = req.body;
+    const { code, workspaceId } = req.body || {};
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!workspaceId) {
+      return res.status(400).json({ message: "workspaceId is required" });
     }
 
     if (!code) {
@@ -177,6 +183,7 @@ export async function exchangeMetaCode(req, res, next) {
     const { data: connection, error: insertError } = await supabase
       .from("meta_connections")
       .insert({
+        workspace_id: workspaceId,
         connected_by: userId,
         business_name: null,
         meta_user_name: "Meta User",
@@ -210,6 +217,11 @@ export async function exchangeMetaCode(req, res, next) {
 export async function getMetaConnections(req, res, next) {
   try {
     const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { data: connections, error } = await supabase
       .from("meta_connections")
       .select("*")
@@ -218,12 +230,25 @@ export async function getMetaConnections(req, res, next) {
 
     if (error) throw error;
 
-    const { data: pages } = await supabase.from("meta_pages").select("*");
-    const { data: igAccounts } = await supabase.from("meta_instagram_accounts").select("*");
+    const { data: pages, error: pagesError } = await supabase
+      .from("meta_pages")
+      .select("*");
+
+    if (pagesError) throw pagesError;
+
+    const { data: igAccounts, error: igError } = await supabase
+      .from("meta_instagram_accounts")
+      .select("*");
+
+    if (igError) throw igError;
 
     const items = (connections || []).map((connection) => {
-      const relatedPages = (pages || []).filter((p) => p.connection_id === connection.id);
-      const relatedIg = (igAccounts || []).filter((i) => i.connection_id === connection.id);
+      const relatedPages = (pages || []).filter(
+        (p) => p.connection_id === connection.id
+      );
+      const relatedIg = (igAccounts || []).filter(
+        (i) => i.connection_id === connection.id
+      );
 
       return {
         ...connection,
@@ -233,7 +258,7 @@ export async function getMetaConnections(req, res, next) {
       };
     });
 
-    res.status(200).json({ ok: true, items });
+    return res.status(200).json({ ok: true, items });
   } catch (error) {
     next(error);
   }
@@ -242,14 +267,21 @@ export async function getMetaConnections(req, res, next) {
 export async function syncMetaConnection(req, res, next) {
   try {
     const { connectionId } = req.params;
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const { data: connection, error } = await supabase
       .from("meta_connections")
       .select("*")
       .eq("id", connectionId)
+      .eq("connected_by", userId)
       .single();
 
     if (error) throw error;
+
     if (!connection) {
       return res.status(404).json({ message: "Meta connection not found" });
     }
@@ -271,10 +303,45 @@ export async function syncMetaConnection(req, res, next) {
 export async function deleteMetaConnection(req, res, next) {
   try {
     const { connectionId } = req.params;
+    const userId = getUserId(req);
 
-    await supabase.from("meta_instagram_accounts").delete().eq("connection_id", connectionId);
-    await supabase.from("meta_pages").delete().eq("connection_id", connectionId);
-    await supabase.from("meta_connections").delete().eq("id", connectionId);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { data: connection, error: connectionError } = await supabase
+      .from("meta_connections")
+      .select("id")
+      .eq("id", connectionId)
+      .eq("connected_by", userId)
+      .single();
+
+    if (connectionError) throw connectionError;
+
+    if (!connection) {
+      return res.status(404).json({ message: "Meta connection not found" });
+    }
+
+    const { error: deleteIgError } = await supabase
+      .from("meta_instagram_accounts")
+      .delete()
+      .eq("connection_id", connectionId);
+
+    if (deleteIgError) throw deleteIgError;
+
+    const { error: deletePagesError } = await supabase
+      .from("meta_pages")
+      .delete()
+      .eq("connection_id", connectionId);
+
+    if (deletePagesError) throw deletePagesError;
+
+    const { error: deleteConnectionError } = await supabase
+      .from("meta_connections")
+      .delete()
+      .eq("id", connectionId);
+
+    if (deleteConnectionError) throw deleteConnectionError;
 
     return res.status(200).json({
       ok: true,
@@ -289,17 +356,28 @@ export async function getMetaPages(req, res, next) {
   try {
     const userId = getUserId(req);
 
-    const { data: connections } = await supabase
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { data: connections, error: connectionsError } = await supabase
       .from("meta_connections")
       .select("id")
       .eq("connected_by", userId);
+
+    if (connectionsError) throw connectionsError;
 
     const connectionIds = (connections || []).map((item) => item.id);
 
     const { data: pages, error } = await supabase
       .from("meta_pages")
       .select("*")
-      .in("connection_id", connectionIds.length ? connectionIds : ["00000000-0000-0000-0000-000000000000"])
+      .in(
+        "connection_id",
+        connectionIds.length
+          ? connectionIds
+          : ["00000000-0000-0000-0000-000000000000"]
+      )
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -318,6 +396,11 @@ export async function getMetaPages(req, res, next) {
 export async function getMetaPageDetail(req, res, next) {
   try {
     const { pageId } = req.params;
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const { data: page, error } = await supabase
       .from("meta_pages")
@@ -326,14 +409,30 @@ export async function getMetaPageDetail(req, res, next) {
       .single();
 
     if (error) throw error;
+
     if (!page) {
       return res.status(404).json({ message: "Meta page not found" });
     }
 
-    const { data: igAccounts } = await supabase
+    const { data: connection, error: connectionError } = await supabase
+      .from("meta_connections")
+      .select("id, connected_by")
+      .eq("id", page.connection_id)
+      .eq("connected_by", userId)
+      .single();
+
+    if (connectionError) throw connectionError;
+
+    if (!connection) {
+      return res.status(404).json({ message: "Meta page not found" });
+    }
+
+    const { data: igAccounts, error: igError } = await supabase
       .from("meta_instagram_accounts")
       .select("*")
       .eq("page_id", pageId);
+
+    if (igError) throw igError;
 
     const item = {
       ...page,
@@ -352,28 +451,44 @@ export async function getMetaInstagramAccounts(req, res, next) {
   try {
     const userId = getUserId(req);
 
-    const { data: connections } = await supabase
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { data: connections, error: connectionsError } = await supabase
       .from("meta_connections")
       .select("id")
       .eq("connected_by", userId);
+
+    if (connectionsError) throw connectionsError;
 
     const connectionIds = (connections || []).map((item) => item.id);
 
     const { data: accounts, error } = await supabase
       .from("meta_instagram_accounts")
       .select("*")
-      .in("connection_id", connectionIds.length ? connectionIds : ["00000000-0000-0000-0000-000000000000"])
+      .in(
+        "connection_id",
+        connectionIds.length
+          ? connectionIds
+          : ["00000000-0000-0000-0000-000000000000"]
+      )
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     const pageIds = (accounts || []).map((a) => a.page_id).filter(Boolean);
-    const { data: pages } = await supabase
+
+    const { data: pages, error: pagesError } = await supabase
       .from("meta_pages")
       .select("page_id,page_name")
       .in("page_id", pageIds.length ? pageIds : ["none"]);
 
-    const pageMap = Object.fromEntries((pages || []).map((p) => [p.page_id, p]));
+    if (pagesError) throw pagesError;
+
+    const pageMap = Object.fromEntries(
+      (pages || []).map((p) => [p.page_id, p])
+    );
 
     const items = (accounts || []).map((item) => ({
       ...item,
@@ -389,6 +504,11 @@ export async function getMetaInstagramAccounts(req, res, next) {
 export async function getMetaInstagramDetail(req, res, next) {
   try {
     const { accountId } = req.params;
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const { data: item, error } = await supabase
       .from("meta_instagram_accounts")
@@ -397,18 +517,34 @@ export async function getMetaInstagramDetail(req, res, next) {
       .single();
 
     if (error) throw error;
+
     if (!item) {
       return res.status(404).json({ message: "Instagram account not found" });
     }
 
+    const { data: connection, error: connectionError } = await supabase
+      .from("meta_connections")
+      .select("id, connected_by")
+      .eq("id", item.connection_id)
+      .eq("connected_by", userId)
+      .single();
+
+    if (connectionError) throw connectionError;
+
+    if (!connection) {
+      return res.status(404).json({ message: "Instagram account not found" });
+    }
+
     let page = null;
+
     if (item.page_id) {
-      const { data: pageData } = await supabase
+      const { data: pageData, error: pageError } = await supabase
         .from("meta_pages")
         .select("page_id,page_name")
         .eq("page_id", item.page_id)
         .single();
 
+      if (pageError && pageError.code !== "PGRST116") throw pageError;
       page = pageData || null;
     }
 

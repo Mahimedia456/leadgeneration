@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, getSelectedWorkspace } from "../../lib/api";
 
 export default function AuthMetaCallback() {
   const navigate = useNavigate();
@@ -16,17 +16,26 @@ export default function AuthMetaCallback() {
         const errorDescription = params.get("error_description");
 
         if (error) {
-          throw new Error(errorDescription || errorReason || "Meta authorization failed");
+          throw new Error(
+            errorDescription || errorReason || "Meta authorization failed"
+          );
         }
 
         if (!code) {
           throw new Error("Authorization code not found in callback URL");
         }
 
+        const selectedWorkspace = getSelectedWorkspace();
+        const workspaceId = selectedWorkspace?.id || selectedWorkspace?.workspace_id || "";
+
+        if (!workspaceId) {
+          throw new Error("No workspace selected. Please select a workspace first.");
+        }
+
         await apiFetch("/api/meta/exchange-code", {
           method: "POST",
           auth: true,
-          body: { code },
+          body: { code, workspaceId },
         });
 
         navigate("/meta/connections?success=1", { replace: true });
