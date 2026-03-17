@@ -35,6 +35,6 @@ export const env = {
   metaAppSecret: process.env.META_APP_SECRET || "",
   metaApiVersion: process.env.META_API_VERSION || "v25.0",
   metaRedirectUri:
-    process.env.META_REDIRECT_URI || "http://localhost:4000/api/meta/oauth/callback",
+    process.env.META_REDIRECT_URI || "https://leadgeneration-9fbm.vercel.app/api/meta/facebook/callback",
   metaVerifyToken: process.env.META_VERIFY_TOKEN || "",
 };

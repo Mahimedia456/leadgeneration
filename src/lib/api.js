@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 const ACCESS_TOKEN_KEY = "leadgen_access_token";
 const REFRESH_TOKEN_KEY = "leadgen_refresh_token";
@@ -102,11 +102,18 @@ export async function apiFetch(path, options = {}) {
     auth = false,
   } = options;
 
+  if (!API_BASE_URL) {
+    throw new Error(
+      "VITE_API_BASE_URL is missing. Add it in frontend env and restart/redeploy."
+    );
+  }
+
   const finalHeaders = {
     ...headers,
   };
 
-  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
 
   if (!isFormData) {
     finalHeaders["Content-Type"] = "application/json";

@@ -1,14 +1,10 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import app from "./app.js";
-import { env } from "./config/env.js";
-import { verifyMailer } from "./lib/mailer.js";
 
-app.listen(env.port, async () => {
-  console.log(`Server running on http://localhost:${env.port}`);
+const PORT = Number(process.env.PORT || 4000);
 
-  try {
-    await verifyMailer();
-    console.log("SMTP connection verified successfully");
-  } catch (error) {
-    console.error("SMTP verification failed:", error.message);
-  }
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
