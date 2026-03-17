@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -10,60 +11,7 @@ import {
   Lock,
   MoreHorizontal,
 } from "lucide-react";
-
-const metrics = [
-  {
-    title: "Assigned Brands",
-    value: "3",
-    delta: "+1",
-    icon: Briefcase,
-    tone: "blue",
-  },
-  {
-    title: "Permissions",
-    value: "24",
-    delta: "+3",
-    icon: ShieldCheck,
-    tone: "emerald",
-  },
-  {
-    title: "Open Tasks",
-    value: "8",
-    delta: "Stable",
-    icon: Activity,
-    tone: "slate",
-  },
-  {
-    title: "Compliance Score",
-    value: "98%",
-    delta: "+2.1%",
-    icon: Lock,
-    tone: "rose",
-  },
-];
-
-const activities = [
-  {
-    title: "User Updated",
-    text: "Role changed from Brand Editor to Global Admin",
-    time: "2 hours ago",
-  },
-  {
-    title: "Invite Accepted",
-    text: "User accepted invitation and activated account",
-    time: "Yesterday, 4:12 PM",
-  },
-  {
-    title: "Brand Assigned",
-    text: "Horizon workspace added to assigned brands",
-    time: "Oct 24, 2023",
-  },
-  {
-    title: "Permission Updated",
-    text: "Export data access enabled",
-    time: "Oct 22, 2023",
-  },
-];
+import { getStoredUser, getUserByIdApi } from "../../lib/api";
 
 function metricToneClasses(tone) {
   const map = {
@@ -78,6 +26,117 @@ function metricToneClasses(tone) {
 export default function UserDetail() {
   const navigate = useNavigate();
   const { userId } = useParams();
+  const currentUser = getStoredUser();
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUser() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const res = await getUserByIdApi(userId);
+        if (!cancelled) {
+          setUser(res.user);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          if (err.statusCode === 403) {
+            navigate("/access-denied");
+            return;
+          }
+          setError(err.message || "Failed to load user");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, navigate]);
+
+  const metrics = useMemo(() => {
+    const brandCount = (user?.assignedBrands || []).length;
+    const workspaceCount = (user?.assignedWorkspaces || []).length;
+
+    return [
+      {
+        title: "Assigned Brands",
+        value: String(brandCount),
+        delta: "Scoped",
+        icon: Briefcase,
+        tone: "blue",
+      },
+      {
+        title: "Assigned Workspaces",
+        value: String(workspaceCount),
+        delta: "Visible",
+        icon: ShieldCheck,
+        tone: "emerald",
+      },
+      {
+        title: "Status",
+        value: user?.status || "-",
+        delta: "Current",
+        icon: Activity,
+        tone: "slate",
+      },
+      {
+        title: "Role",
+        value: user?.globalRole || "-",
+        delta: "Access",
+        icon: Lock,
+        tone: "rose",
+      },
+    ];
+  }, [user]);
+
+  const activities = [
+    {
+      title: "User Profile Loaded",
+      text: "User profile opened successfully",
+      time: "Just now",
+    },
+    {
+      title: "Access Scope",
+      text: "Brand and workspace visibility resolved from backend",
+      time: "Current",
+    },
+    {
+      title: "Role Snapshot",
+      text: "Role and memberships displayed from latest record",
+      time: "Current",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel p-8">Loading user...</div>
+      </AppShell>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <AppShell>
+        <div className="app-panel p-8 text-red-500">
+          {error || "User not found"}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -89,47 +148,55 @@ export default function UserDetail() {
             <div className="relative flex flex-col justify-between gap-8 xl:flex-row xl:items-center">
               <div className="flex flex-col gap-8 md:flex-row md:items-center">
                 <div className="flex h-32 w-32 items-center justify-center rounded-[2rem] bg-gradient-to-br from-slate-950 to-slate-800 text-2xl font-black text-white shadow-xl">
-                  LW
+                  {(user.fullName || "U")
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")}
                 </div>
 
                 <div>
                   <div className="flex flex-wrap items-center gap-4">
                     <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                      Liam Wilson
+                      {user.fullName || "Unnamed User"}
                     </h1>
                     <span className="rounded-lg bg-blue-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                      Global Admin
+                      {user.globalRole}
                     </span>
                   </div>
 
                   <p className="mt-3 text-2xl font-medium text-slate-500 dark:text-slate-400">
-                    Enterprise Access • Multi-Brand Operations
+                    Enterprise Access • Role Based Visibility
                   </p>
 
                   <div className="mt-5 flex flex-wrap gap-6 text-sm font-semibold text-slate-400">
                     <span className="flex items-center gap-2">
                       <CalendarDays size={16} className="text-blue-500/70" />
-                      Joined Oct 2022
+                      Joined user profile
                     </span>
                     <span className="flex items-center gap-2">
                       <Mail size={16} className="text-blue-500/70" />
-                      liam.w@nexus-labs.com
+                      {user.email}
                     </span>
                     <span className="flex items-center gap-2">
                       <ShieldCheck size={16} className="text-blue-500/70" />
-                      Verified Access
+                      {user.status}
                     </span>
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => navigate(`/users/${userId}/edit`)}
-                  className="auth-outline-btn rounded-xl px-5 py-3 text-sm font-semibold"
-                >
-                  Edit User
-                </button>
+                {(currentUser?.globalRole === "admin" ||
+                  currentUser?.globalRole === "brand_user") && (
+                  <button
+                    onClick={() => navigate(`/users/${userId}/edit`)}
+                    className="auth-outline-btn rounded-xl px-5 py-3 text-sm font-semibold"
+                  >
+                    Edit User
+                  </button>
+                )}
+
                 <button
                   onClick={() => navigate("/roles-permissions")}
                   className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg dark:bg-white dark:text-slate-900"
@@ -146,15 +213,15 @@ export default function UserDetail() {
                 </p>
 
                 <div className="flex -space-x-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-slate-300 text-xs font-black shadow-sm dark:border-[#111111] dark:bg-slate-700">
-                    NL
-                  </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-slate-400 text-xs font-black shadow-sm dark:border-[#111111] dark:bg-slate-600">
-                    V
-                  </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-slate-500 text-xs font-black text-white shadow-sm dark:border-[#111111] dark:bg-slate-500">
-                    H
-                  </div>
+                  {(user.assignedBrands || []).slice(0, 4).map((brand) => (
+                    <div
+                      key={brand.id || brand.name}
+                      className="flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-slate-300 text-xs font-black shadow-sm dark:border-[#111111] dark:bg-slate-700"
+                      title={brand.name}
+                    >
+                      {(brand.name || "B").slice(0, 2).toUpperCase()}
+                    </div>
+                  ))}
                 </div>
 
                 <button className="text-sm font-bold text-blue-600">
@@ -164,7 +231,9 @@ export default function UserDetail() {
 
               <div className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                Active now
+                {String(user.status).toLowerCase() === "active"
+                  ? "Active now"
+                  : user.status}
               </div>
             </div>
           </div>
@@ -201,15 +270,7 @@ export default function UserDetail() {
                     <Icon size={22} />
                   </div>
 
-                  <span
-                    className={`rounded-lg px-3 py-1 text-xs font-bold ${
-                      item.delta.startsWith("+")
-                        ? "bg-emerald-500/10 text-emerald-500"
-                        : item.delta.startsWith("-")
-                        ? "bg-rose-500/10 text-rose-500"
-                        : "bg-slate-200 dark:bg-white/10 text-slate-400"
-                    }`}
-                  >
+                  <span className="rounded-lg px-3 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-500">
                     {item.delta}
                   </span>
                 </div>
@@ -217,7 +278,7 @@ export default function UserDetail() {
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                   {item.title}
                 </p>
-                <p className="mt-3 text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                <p className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                   {item.value}
                 </p>
               </div>
@@ -231,71 +292,55 @@ export default function UserDetail() {
               <div className="mb-10 flex items-center justify-between">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-                    Activity Trend
+                    Brand Allocation
                   </h3>
                   <p className="mt-1 text-sm text-slate-400">
-                    Permission changes and workspace activity over time
+                    User brand and workspace scope
                   </p>
                 </div>
 
                 <select className="auth-minimal-input rounded-xl px-4 py-2 text-sm font-semibold">
-                  <option>Last 30 Days</option>
-                  <option>Last 90 Days</option>
+                  <option>Current Scope</option>
                 </select>
               </div>
 
-              <div className="flex h-72 items-end gap-2.5">
-                {[35, 48, 54, 76, 58, 61, 42, 84, 66, 40, 57, 72].map((h, i) => (
-                  <div
-                    key={i}
-                    className={`flex-1 rounded-xl ${
-                      i === 7
-                        ? "bg-blue-600 shadow-lg shadow-blue-500/20"
-                        : i === 3 || i === 11
-                        ? "bg-blue-600/45"
-                        : "bg-slate-200 dark:bg-white/10"
-                    }`}
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-6 flex justify-between px-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                <span>Oct 01</span>
-                <span>Oct 10</span>
-                <span>Oct 20</span>
-                <span>Oct 30</span>
+              <div className="space-y-4">
+                {(user.assignedBrands || []).length ? (
+                  user.assignedBrands.map((brand) => (
+                    <div
+                      key={brand.id || brand.name}
+                      className="rounded-2xl border border-slate-200 p-4 dark:border-white/10"
+                    >
+                      <p className="font-bold text-slate-900 dark:text-white">
+                        {brand.name}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-slate-500">No assigned brands.</div>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="app-panel rounded-[2rem] p-8">
                 <h3 className="mb-8 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                  Brand Allocation
+                  Assigned Workspaces
                 </h3>
 
                 <div className="space-y-6">
-                  {[
-                    ["Nexus Labs", "42%", "bg-blue-600"],
-                    ["Vortex Global", "31%", "bg-blue-300"],
-                    ["Horizon Corp", "27%", "bg-slate-300 dark:bg-white/10"],
-                  ].map(([label, value, color]) => (
-                    <div key={label} className="flex items-center gap-4">
-                      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
-                      <p className="flex-1 text-sm font-bold text-slate-600 dark:text-slate-300">
-                        {label}
-                      </p>
-                      <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-8 border-t border-slate-200 pt-6 dark:border-white/10">
-                  <button className="text-sm font-black text-blue-600">
-                    View Full Allocation
-                  </button>
+                  {(user.assignedWorkspaces || []).length ? (
+                    user.assignedWorkspaces.map((workspace) => (
+                      <div key={workspace.id} className="flex items-center gap-4">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                        <p className="flex-1 text-sm font-bold text-slate-600 dark:text-slate-300">
+                          {workspace.name}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No workspaces assigned.</p>
+                  )}
                 </div>
               </div>
 
@@ -341,9 +386,9 @@ export default function UserDetail() {
                 <p className="mt-4 text-center text-xs font-semibold leading-relaxed text-slate-400">
                   User security posture is{" "}
                   <span className="font-black text-emerald-500">
-                    fully compliant
+                    compliant
                   </span>{" "}
-                  with current workspace rules.
+                  with current access rules.
                 </p>
               </div>
             </div>

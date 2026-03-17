@@ -25,6 +25,7 @@ import UserDetail from "../pages/users/UserDetail";
 import RolesPermissions from "../pages/users/RolesPermissions";
 
 import MetaConnections from "../pages/meta/MetaConnections";
+import MetaConnectionFinish from "../pages/meta/MetaConnectionFinish";
 import FacebookPages from "../pages/meta/FacebookPages";
 import InstagramAccounts from "../pages/meta/InstagramAccounts";
 import FacebookPageDetail from "../pages/meta/FacebookPageDetail";
@@ -56,6 +57,10 @@ import Workspaces from "../pages/workspaces/Workspaces";
 import CreateWorkspace from "../pages/workspaces/CreateWorkspace";
 import EditWorkspace from "../pages/workspaces/EditWorkspace";
 import WorkspaceDetail from "../pages/workspaces/WorkspaceDetail";
+import ManageMembers from "../pages/workspaces/ManageMembers";
+
+import PrivacyPolicy from "../pages/legal/PrivacyPolicy";
+import TermsOfUse from "../pages/legal/TermsOfUse";
 
 import AppShell from "../layouts/AppShell";
 
@@ -99,13 +104,11 @@ export default function AppRouter() {
       <Route path="/activity-logs" element={<ActivityLogs />} />
 
       <Route path="/meta-connections" element={<MetaConnections />} />
-      <Route path="/pages" element={<FacebookPages />} />
-      <Route path="/instagram" element={<InstagramAccounts />} />
+      <Route path="/meta-connections/finish" element={<MetaConnectionFinish />} />
+      <Route path="/meta/pages" element={<FacebookPages />} />
       <Route path="/meta/pages/:pageId" element={<FacebookPageDetail />} />
-      <Route
-        path="/meta/instagram/:accountId"
-        element={<InstagramAccountDetail />}
-      />
+      <Route path="/meta/instagram" element={<InstagramAccounts />} />
+      <Route path="/meta/instagram/:accountId" element={<InstagramAccountDetail />} />
 
       <Route path="/campaigns" element={<Campaigns />} />
       <Route path="/campaigns/add" element={<AddCampaign />} />
@@ -117,21 +120,18 @@ export default function AppRouter() {
       <Route path="/lead-exports" element={<LeadExport />} />
 
       <Route path="/distribution" element={<Distribution />} />
-      <Route
-        path="/distribution/assignment-rules"
-        element={<AssignmentRule />}
-      />
+      <Route path="/distribution/assignment-rules" element={<AssignmentRule />} />
       <Route path="/distribution/create-rule" element={<CreateNewRule />} />
       <Route path="/distribution/edit-rule" element={<EditOldRule />} />
-      <Route
-        path="/distribution/assigned-leads"
-        element={<AssignmentLeads />}
-      />
+      <Route path="/distribution/assigned-leads" element={<AssignmentLeads />} />
 
       <Route path="/reports" element={<Reports />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/settings/security" element={<Security />} />
-      <Route path="/settings/notificationssetting" element={<NotificationsSetting />} />
+      <Route
+        path="/settings/notificationssetting"
+        element={<NotificationsSetting />}
+      />
       <Route path="/settings/team-members" element={<TeamMembers />} />
       <Route path="/profile" element={<EditProfile />} />
 
@@ -145,6 +145,13 @@ export default function AppRouter() {
       <Route path="/workspaces/create" element={<CreateWorkspace />} />
       <Route path="/workspaces/:workspaceId" element={<WorkspaceDetail />} />
       <Route path="/workspaces/edit/:workspaceId" element={<EditWorkspace />} />
+      <Route
+        path="/workspaces/:workspaceId/members"
+        element={<ManageMembers />}
+      />
+
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/terms-of-use" element={<TermsOfUse />} />
 
       <Route
         path="/placeholder"

@@ -3,14 +3,45 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../../layouts/AuthLayout";
 import logo from "../../assets/logo.png";
 import { ArrowLeft } from "lucide-react";
+import { forgotPasswordApi, setResetEmail } from "../../lib/api";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/verify-otp");
+    setError("");
+    setSuccess("");
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setError("Email is required");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await forgotPasswordApi({
+        email: normalizedEmail,
+      });
+
+      setResetEmail(normalizedEmail);
+      setSuccess("Verification code sent successfully.");
+
+      setTimeout(() => {
+        navigate("/verify-otp");
+      }, 500);
+    } catch (err) {
+      setError(err.message || "Failed to send reset code");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,11 +81,24 @@ export default function ForgotPassword() {
               />
             </div>
 
+            {error ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                {error}
+              </div>
+            ) : null}
+
+            {success ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                {success}
+              </div>
+            ) : null}
+
             <button
               type="submit"
-              className="blue-gradient-btn w-full rounded-xl py-3.5 text-sm font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Send Reset Code
+              {loading ? "Sending..." : "Send Reset Code"}
             </button>
           </form>
 

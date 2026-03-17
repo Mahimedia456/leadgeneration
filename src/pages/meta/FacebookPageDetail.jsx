@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -15,96 +15,9 @@ import {
   Link2,
   Settings,
   ExternalLink,
+  LoaderCircle,
 } from "lucide-react";
-
-const pagesData = [
-  {
-    id: "PG-8291048293",
-    name: "Lumina Electronics",
-    brand: "Tech Global",
-    leadCount: 428,
-    leadChange: "+12%",
-    status: "Synced",
-    pageHealth: 96,
-    responseRate: "92%",
-    lastSync: "2 mins ago",
-    pageType: "E-commerce",
-    connectedBy: "Alex Morgan",
-    businessManager: "Alpha Global Retail",
-    audienceSize: "184K",
-    logoBg: "from-sky-950 to-blue-700",
-    description:
-      "Primary Facebook lead generation page for Lumina Electronics campaigns and catalog promotions.",
-  },
-  {
-    id: "PG-2194820194",
-    name: "Eco Living Essentials",
-    brand: "Sustainable Co.",
-    leadCount: 82,
-    leadChange: "-4%",
-    status: "Pending Sync",
-    pageHealth: 72,
-    responseRate: "81%",
-    lastSync: "14 mins ago",
-    pageType: "Home & Lifestyle",
-    connectedBy: "Sophia Kim",
-    businessManager: "Green Commerce Hub",
-    audienceSize: "62K",
-    logoBg: "from-emerald-950 to-emerald-700",
-    description:
-      "Facebook page used for sustainable home product inquiries and seasonal retargeting flows.",
-  },
-  {
-    id: "PG-9402910482",
-    name: "Velocity Sportswear",
-    brand: "Velocity Inc.",
-    leadCount: 1029,
-    leadChange: "+52%",
-    status: "Auth Failed",
-    pageHealth: 43,
-    responseRate: "67%",
-    lastSync: "41 mins ago",
-    pageType: "Retail & Apparel",
-    connectedBy: "Daniel Brooks",
-    businessManager: "Velocity Growth Stack",
-    audienceSize: "312K",
-    logoBg: "from-rose-950 to-rose-700",
-    description:
-      "High-volume sportswear acquisition page currently affected by authentication issues.",
-  },
-  {
-    id: "PG-7720918441",
-    name: "Northline Furnishings",
-    brand: "Northline Home",
-    leadCount: 314,
-    leadChange: "+8%",
-    status: "Synced",
-    pageHealth: 91,
-    responseRate: "88%",
-    lastSync: "5 mins ago",
-    pageType: "Furniture",
-    connectedBy: "Emma Scott",
-    businessManager: "Northline Commerce",
-    audienceSize: "126K",
-    logoBg: "from-slate-950 to-slate-700",
-    description:
-      "Furniture and interior design Facebook page used for showroom leads and remarketing campaigns.",
-  },
-];
-
-const recentLeadSources = [
-  { source: "Instant Form Campaign", volume: 186, conversion: "18.2%" },
-  { source: "Click to Messenger", volume: 121, conversion: "12.7%" },
-  { source: "Organic Inbox", volume: 74, conversion: "8.4%" },
-  { source: "Retargeting Campaign", volume: 47, conversion: "10.1%" },
-];
-
-const recentSyncEvents = [
-  { title: "Lead form sync completed", time: "2 mins ago", status: "Success" },
-  { title: "Permissions validated", time: "18 mins ago", status: "Success" },
-  { title: "Webhook delivery retried", time: "42 mins ago", status: "Warning" },
-  { title: "Audience refresh queued", time: "1 hour ago", status: "Queued" },
-];
+import { getMetaPageDetailApi } from "../../lib/metaApi";
 
 function statToneClasses(tone) {
   const map = {
@@ -140,20 +53,127 @@ function healthTone(health) {
   return { bar: "bg-rose-500", text: "text-rose-500" };
 }
 
+function timeAgo(dateString) {
+  if (!dateString) return "--";
+  const diff = Date.now() - new Date(dateString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hrs ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} days ago`;
+}
+
 export default function FacebookPageDetail() {
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const page = useMemo(
-    () => pagesData.find((item) => item.id === pageId) || pagesData[0],
-    [pageId]
-  );
+  const [page, setPage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await getMetaPageDetailApi(pageId);
+        const item = res.item;
+
+        setPage({
+          id: item.page_id,
+          name: item.page_name,
+          brand: "Current Workspace",
+          leadCount: Number(item.meta_leads?.[0]?.count || 0),
+          leadChange: "+0%",
+          status:
+            item.status === "connected"
+              ? "Synced"
+              : item.status === "pending"
+              ? "Pending Sync"
+              : "Auth Failed",
+          pageHealth: item.status === "connected" ? 96 : 48,
+          responseRate: "Live",
+          lastSync: timeAgo(item.last_synced_at),
+          pageType: item.page_category || "Facebook Page",
+          connectedBy: "Workspace Admin",
+          businessManager: "Meta Workspace Connection",
+          audienceSize: "--",
+          logoBg: "from-sky-950 to-blue-700",
+          description:
+            "Connected Facebook lead generation page for workspace campaigns, form sync, and asset monitoring.",
+          forms: item.meta_lead_forms || [],
+          instagramAccounts: item.meta_instagram_accounts || [],
+        });
+      } catch (err) {
+        setError(err.message || "Failed to load page detail");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [pageId]);
+
+  const recentLeadSources = useMemo(() => {
+    if (!page) return [];
+    const forms = page.forms || [];
+    if (!forms.length) {
+      return [{ source: "Lead Forms", volume: page.leadCount, conversion: "Live" }];
+    }
+    return forms.map((form) => ({
+      source: form.form_name || form.form_id,
+      volume: Math.max(1, Math.floor(page.leadCount / forms.length || 0)),
+      conversion: "Live",
+    }));
+  }, [page]);
+
+  const recentSyncEvents = useMemo(() => {
+    if (!page) return [];
+    return [
+      { title: "Lead form sync completed", time: page.lastSync, status: "Success" },
+      { title: "Permissions validated", time: page.lastSync, status: "Success" },
+      {
+        title: page.instagramAccounts?.length
+          ? "Instagram link detected"
+          : "Instagram account not linked",
+        time: page.lastSync,
+        status: page.instagramAccounts?.length ? "Success" : "Queued",
+      },
+      { title: "Audience refresh queued", time: page.lastSync, status: "Queued" },
+    ];
+  }, [page]);
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel p-10 text-sm text-slate-500">
+          <div className="inline-flex items-center gap-2">
+            <LoaderCircle size={18} className="animate-spin" />
+            Loading Facebook page detail...
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (error || !page) {
+    return (
+      <AppShell>
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-500">
+          {error || "Page not found"}
+        </div>
+      </AppShell>
+    );
+  }
 
   const health = healthTone(page.pageHealth);
 
   const topStats = [
     {
-      title: "Leads (24h)",
+      title: "Leads",
       value: page.leadCount.toLocaleString(),
       change: page.leadChange,
       icon: Users,
@@ -169,14 +189,14 @@ export default function FacebookPageDetail() {
     {
       title: "Response Rate",
       value: page.responseRate,
-      change: "Messenger",
+      change: "Realtime",
       icon: Activity,
       tone: "indigo",
     },
     {
       title: "Last Sync",
       value: page.lastSync,
-      change: "Realtime",
+      change: "Meta",
       icon: RefreshCcw,
       tone: "emerald",
     },
@@ -188,7 +208,7 @@ export default function FacebookPageDetail() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <button
-              onClick={() => navigate("/pages")}
+              onClick={() => navigate("/meta/pages")}
               className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-blue-600"
             >
               <ArrowLeft size={16} />
@@ -220,11 +240,11 @@ export default function FacebookPageDetail() {
             </button>
 
             <button
-              onClick={() => navigate(`/meta/pages/${page.id}/settings`)}
+              onClick={() => navigate("/meta/pages")}
               className="blue-gradient-btn flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
             >
               <Settings size={16} />
-              Manage Page
+              Back to Pages
             </button>
           </div>
         </div>
@@ -298,7 +318,7 @@ export default function FacebookPageDetail() {
                       <p className="text-sm font-bold text-slate-900 dark:text-white">
                         Brand Assignment
                       </p>
-                      <p className="text-xs text-slate-500">Linked organization context</p>
+                      <p className="text-xs text-slate-500">Linked workspace context</p>
                     </div>
                   </div>
 
@@ -333,7 +353,7 @@ export default function FacebookPageDetail() {
                       <p className="text-sm font-bold text-slate-900 dark:text-white">
                         Page Metadata
                       </p>
-                      <p className="text-xs text-slate-500">Identity and audience footprint</p>
+                      <p className="text-xs text-slate-500">Identity and sync footprint</p>
                     </div>
                   </div>
 
@@ -469,7 +489,7 @@ export default function FacebookPageDetail() {
 
               <div className="divide-y divide-slate-200 dark:divide-white/10">
                 {recentSyncEvents.map((event) => (
-                  <div key={event.title} className="px-6 py-4">
+                  <div key={`${event.title}-${event.time}`} className="px-6 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
                         <div

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -11,85 +11,104 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
-  MoreHorizontal,
 } from "lucide-react";
-
-const workspaces = [
-  {
-    id: "WS-1001",
-    name: "Quantum Leap Labs",
-    subtitle: "Global Production Hub",
-    status: "Active",
-    role: "Administrator",
-    owner: "Sarah Chen",
-    region: "North America (Virginia)",
-    timezone: "(GMT-05:00) Eastern Time",
-    members: 14,
-    activeProjects: 28,
-    securityScore: 96,
-    description:
-      "Primary global production workspace used for enterprise campaigns, operational collaboration, and cross-functional delivery.",
-  },
-  {
-    id: "WS-1002",
-    name: "Aether Brands",
-    subtitle: "Marketing & Creative",
-    status: "Syncing",
-    role: "Contributor",
-    owner: "James Wilson",
-    region: "Europe (Frankfurt)",
-    timezone: "(GMT+01:00) Paris",
-    members: 6,
-    activeProjects: 12,
-    securityScore: 91,
-    description:
-      "Creative and marketing collaboration environment used for campaign planning, assets, and ongoing brand execution.",
-  },
-  {
-    id: "WS-1003",
-    name: "Vector Dynamics",
-    subtitle: "Legacy R&D Archive",
-    status: "Error",
-    role: "Viewer Only",
-    owner: "Elena Rodriguez",
-    region: "Asia Pacific (Singapore)",
-    timezone: "(GMT+08:00) Singapore",
-    members: 4,
-    activeProjects: 2,
-    securityScore: 68,
-    description:
-      "Legacy research workspace currently affected by integration and sync failures across historical systems.",
-  },
-];
-
-const recentEvents = [
-  { title: "Member access updated", time: "16 mins ago", status: "Success" },
-  { title: "Workspace sync check executed", time: "43 mins ago", status: "Queued" },
-  { title: "API authentication refreshed", time: "2 hours ago", status: "Success" },
-  { title: "Third-party connector warning", time: "5 hours ago", status: "Warning" },
-];
-
-function statusClasses(status) {
-  if (status === "Active") {
-    return "border border-emerald-500/20 bg-emerald-500/10 text-emerald-500";
-  }
-  if (status === "Syncing") {
-    return "border border-blue-500/20 bg-blue-500/10 text-blue-500";
-  }
-  if (status === "Error") {
-    return "border border-rose-500/20 bg-rose-500/10 text-rose-500";
-  }
-  return "border border-slate-500/20 bg-slate-500/10 text-slate-400";
-}
+import {
+  deleteWorkspaceApi,
+  getStoredUser,
+  getWorkspaceByIdApi,
+  getWorkspaceMembersApi,
+} from "../../lib/api";
 
 export default function WorkspaceDetail() {
   const navigate = useNavigate();
   const { workspaceId } = useParams();
+  const user = getStoredUser();
 
-  const workspace = useMemo(
-    () => workspaces.find((item) => item.id === workspaceId) || workspaces[0],
-    [workspaceId]
-  );
+  const [workspace, setWorkspace] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadWorkspace() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [workspaceRes, membersRes] = await Promise.all([
+          getWorkspaceByIdApi(workspaceId),
+          getWorkspaceMembersApi(workspaceId).catch(() => ({ members: [] })),
+        ]);
+
+        setWorkspace(workspaceRes.workspace);
+        setMembers(membersRes.members || []);
+      } catch (err) {
+        if (err.statusCode === 403) {
+          navigate("/access-denied");
+          return;
+        }
+        setError(err.message || "Failed to load workspace");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadWorkspace();
+  }, [workspaceId, navigate]);
+
+  const recentEvents = [
+    { title: "Member access updated", time: "16 mins ago", status: "Success" },
+    { title: "Workspace sync check executed", time: "43 mins ago", status: "Queued" },
+    { title: "API authentication refreshed", time: "2 hours ago", status: "Success" },
+    { title: "Third-party connector warning", time: "5 hours ago", status: "Warning" },
+  ];
+
+  function statusClasses(status) {
+    if (status === "active") {
+      return "border border-emerald-500/20 bg-emerald-500/10 text-emerald-500";
+    }
+    if (status === "inactive") {
+      return "border border-slate-500/20 bg-slate-500/10 text-slate-400";
+    }
+    return "border border-blue-500/20 bg-blue-500/10 text-blue-500";
+  }
+
+  const handleDelete = async () => {
+    if (user?.globalRole !== "admin") {
+      navigate("/access-denied");
+      return;
+    }
+
+    const ok = window.confirm("Are you sure you want to delete this workspace?");
+    if (!ok) return;
+
+    try {
+      await deleteWorkspaceApi(workspaceId);
+      navigate("/workspaces");
+    } catch (err) {
+      setError(err.message || "Delete failed");
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel rounded-3xl p-10 text-center text-slate-500 dark:text-slate-400">
+          Loading workspace...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (error || !workspace) {
+    return (
+      <AppShell>
+        <div className="rounded-3xl border border-red-200 bg-red-50 p-10 text-center text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+          {error || "Workspace not found"}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -119,24 +138,31 @@ export default function WorkspaceDetail() {
               </div>
 
               <p className="mt-3 max-w-3xl text-base text-slate-500 dark:text-slate-400">
-                {workspace.description}
+                {workspace.description || "No description available."}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => navigate(`/workspaces/edit/${workspace.id}`)}
-              className="auth-outline-btn flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold"
-            >
-              <Pencil size={16} />
-              Edit Workspace
-            </button>
+            {user?.globalRole === "admin" && (
+              <>
+                <button
+                  onClick={() => navigate(`/workspaces/edit/${workspace.id}`)}
+                  className="auth-outline-btn flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold"
+                >
+                  <Pencil size={16} />
+                  Edit Workspace
+                </button>
 
-            <button className="flex items-center gap-2 rounded-xl bg-rose-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-600">
-              <Trash2 size={16} />
-              Delete
-            </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-2 rounded-xl bg-rose-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-600"
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -146,25 +172,25 @@ export default function WorkspaceDetail() {
               Team Members
             </p>
             <p className="mt-3 text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-              {workspace.members}
+              {members.length}
             </p>
           </div>
 
           <div className="metric-card app-panel-glow">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-              Active Projects
+              Industry
             </p>
-            <p className="mt-3 text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-              {workspace.activeProjects}
+            <p className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              {workspace.industry || "-"}
             </p>
           </div>
 
           <div className="metric-card app-panel-glow">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-              Security Score
+              Region
             </p>
-            <p className="mt-3 text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-              {workspace.securityScore}%
+            <p className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              {workspace.region || "-"}
             </p>
           </div>
 
@@ -173,7 +199,7 @@ export default function WorkspaceDetail() {
               My Role
             </p>
             <p className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              {workspace.role}
+              {workspace.memberRole || "-"}
             </p>
           </div>
         </div>
@@ -185,19 +211,15 @@ export default function WorkspaceDetail() {
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
                   Workspace Overview
                 </h2>
-
-                <button className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-white/[0.04]">
-                  <MoreHorizontal size={18} />
-                </button>
               </div>
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 p-5 dark:border-white/10">
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
-                    Owner
+                    Primary Contact
                   </p>
                   <p className="mt-3 text-lg font-bold text-slate-900 dark:text-white">
-                    {workspace.owner}
+                    {workspace.primaryContactEmail || "-"}
                   </p>
                 </div>
 
@@ -215,7 +237,7 @@ export default function WorkspaceDetail() {
                     Region
                   </p>
                   <p className="mt-3 text-lg font-bold text-slate-900 dark:text-white">
-                    {workspace.region}
+                    {workspace.region || "-"}
                   </p>
                 </div>
 
@@ -224,7 +246,7 @@ export default function WorkspaceDetail() {
                     Timezone
                   </p>
                   <p className="mt-3 text-lg font-bold text-slate-900 dark:text-white">
-                    {workspace.timezone}
+                    {workspace.timezone || "-"}
                   </p>
                 </div>
               </div>
@@ -292,7 +314,9 @@ export default function WorkspaceDetail() {
                   <p className="text-sm font-bold text-slate-900 dark:text-white">
                     Assigned Role
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">{workspace.role}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {workspace.memberRole || "-"}
+                  </p>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4 dark:bg-white/[0.03]">
@@ -300,7 +324,7 @@ export default function WorkspaceDetail() {
                     Team Scale
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {workspace.members} active collaborators
+                    {members.length} active collaborators
                   </p>
                 </div>
               </div>
@@ -316,19 +340,13 @@ export default function WorkspaceDetail() {
 
               <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                 <div
-                  className={`h-full rounded-full ${
-                    workspace.securityScore >= 90
-                      ? "bg-emerald-500"
-                      : workspace.securityScore >= 75
-                      ? "bg-amber-500"
-                      : "bg-rose-500"
-                  }`}
-                  style={{ width: `${workspace.securityScore}%` }}
+                  className="h-full rounded-full bg-emerald-500"
+                  style={{ width: "96%" }}
                 />
               </div>
 
               <p className="mt-3 text-sm font-bold text-slate-900 dark:text-white">
-                {workspace.securityScore}% security posture
+                Stable security posture
               </p>
             </div>
 
@@ -341,15 +359,20 @@ export default function WorkspaceDetail() {
               </div>
 
               <div className="space-y-3">
-                <button
-                  onClick={() => navigate(`/workspaces/edit/${workspace.id}`)}
-                  className="blue-gradient-btn w-full rounded-xl px-4 py-3 text-sm font-bold text-white"
-                >
-                  Open Edit Workspace
-                </button>
-                <button className="auth-outline-btn w-full rounded-xl px-4 py-3 text-sm font-semibold">
-                  Manage Members
-                </button>
+                {user?.globalRole === "admin" && (
+                  <button
+                    onClick={() => navigate(`/workspaces/edit/${workspace.id}`)}
+                    className="blue-gradient-btn w-full rounded-xl px-4 py-3 text-sm font-bold text-white"
+                  >
+                    Open Edit Workspace
+                  </button>
+                )}
+              <button
+  onClick={() => navigate(`/workspaces/${workspace.id}/members`)}
+  className="auth-outline-btn w-full rounded-xl px-4 py-3 text-sm font-semibold"
+>
+  Manage Members
+</button>
               </div>
             </div>
           </div>

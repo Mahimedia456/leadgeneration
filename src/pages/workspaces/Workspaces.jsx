@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -6,108 +6,99 @@ import {
   PlusCircle,
   MoreHorizontal,
   ArrowRight,
-  AlertCircle,
   Filter,
 } from "lucide-react";
+import {
+  getAllWorkspacesApi,
+  getStoredUser,
+  setSelectedWorkspace,
+} from "../../lib/api";
 
-const summaryStats = [
-  { title: "Total Workspaces", value: "24", change: "~12%", tone: "blue" },
-  { title: "Active", value: "18", change: "~5%", tone: "green" },
-  { title: "Sync Issues", value: "02", change: "-10%", tone: "red" },
-  { title: "Unassigned", value: "04", change: "Stable", tone: "slate" },
-];
-
-const workspacesData = [
-  {
-    id: "WS-1001",
-    name: "Quantum Leap Labs",
-    subtitle: "Global Production Hub",
-    status: "Active",
-    role: "Administrator",
-    lastActivity: "2h ago",
-    members: ["AR", "SM", "+12"],
-    issue: "",
-    logoText: "QL",
-    heroTone: "from-blue-600/30 to-transparent",
-    statusTone: "green",
-  },
-  {
-    id: "WS-1002",
-    name: "Aether Brands",
-    subtitle: "Marketing & Creative",
-    status: "Syncing",
-    role: "Contributor",
-    lastActivity: "14m ago",
-    members: ["EC", "+5"],
-    issue: "",
-    logoText: "AB",
-    heroTone: "from-indigo-600/20 to-transparent",
-    statusTone: "blue",
-  },
-  {
-    id: "WS-1003",
-    name: "Vector Dynamics",
-    subtitle: "Legacy R&D Archive",
-    status: "Error",
-    role: "Viewer Only",
-    lastActivity: "3d ago",
-    members: [],
-    issue: "API Sync Failed",
-    logoText: "VD",
-    heroTone: "from-rose-600/20 to-transparent",
-    statusTone: "red",
-  },
-  {
-    id: "WS-1004",
-    name: "Nexus Analytics",
-    subtitle: "Data Science Unit",
-    status: "Pending",
-    role: "Analyst",
-    lastActivity: "8h ago",
-    members: ["AK"],
-    issue: "",
-    logoText: "NA",
-    heroTone: "from-slate-600/20 to-transparent",
-    statusTone: "slate",
-  },
-];
-
-function statClasses(tone) {
-  const map = {
-    blue: "border-l-blue-600",
-    green: "border-l-emerald-500",
-    red: "border-l-rose-500",
-    slate: "border-l-slate-500",
-  };
-  return map[tone] || map.blue;
-}
-
-function badgeClasses(tone) {
-  const map = {
-    green: "border border-emerald-500/20 bg-emerald-500/10 text-emerald-500",
-    blue: "border border-blue-500/20 bg-blue-500/10 text-blue-500",
-    red: "border border-rose-500/20 bg-rose-500/10 text-rose-500",
-    slate: "border border-slate-500/20 bg-slate-500/10 text-slate-400",
-  };
-  return map[tone] || map.blue;
+function badgeClasses(status) {
+  if (status === "active") {
+    return "border border-emerald-500/20 bg-emerald-500/10 text-emerald-500";
+  }
+  if (status === "inactive") {
+    return "border border-slate-500/20 bg-slate-500/10 text-slate-400";
+  }
+  return "border border-blue-500/20 bg-blue-500/10 text-blue-500";
 }
 
 export default function Workspaces() {
   const navigate = useNavigate();
+
+  const [user] = useState(() => getStoredUser());
   const [query, setQuery] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadWorkspaces() {
+      if (!user || user.globalRole !== "admin") {
+        navigate("/access-denied", { replace: true });
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const data = await getAllWorkspacesApi();
+
+        if (!ignore) {
+          setWorkspaces(data.workspaces || []);
+        }
+      } catch (err) {
+        if (ignore) return;
+
+        if (err.statusCode === 403) {
+          navigate("/access-denied", { replace: true });
+          return;
+        }
+
+        setError(err.message || "Failed to load workspaces");
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadWorkspaces();
+
+    return () => {
+      ignore = true;
+    };
+  }, [navigate, user?.globalRole]);
 
   const filteredWorkspaces = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return workspacesData;
+    if (!q) return workspaces;
 
-    return workspacesData.filter(
+    return workspaces.filter(
       (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.subtitle.toLowerCase().includes(q) ||
-        item.role.toLowerCase().includes(q) ||
-        item.status.toLowerCase().includes(q)
+        item.name?.toLowerCase().includes(q) ||
+        item.metaBusinessName?.toLowerCase().includes(q) ||
+        item.industry?.toLowerCase().includes(q) ||
+        item.status?.toLowerCase().includes(q)
     );
-  }, [query]);
+  }, [query, workspaces]);
+
+  const summaryStats = useMemo(() => {
+    const total = workspaces.length;
+    const active = workspaces.filter((item) => item.status === "active").length;
+    const inactive = workspaces.filter((item) => item.status === "inactive").length;
+
+    return [
+      { title: "Total Workspaces", value: String(total) },
+      { title: "Active", value: String(active) },
+      { title: "Inactive", value: String(inactive) },
+      { title: "Admin Scope", value: "All" },
+    ];
+  }, [workspaces]);
 
   return (
     <AppShell>
@@ -136,31 +127,14 @@ export default function Workspaces() {
           {summaryStats.map((item) => (
             <div
               key={item.title}
-              className={`app-panel rounded-[1.5rem] border-l-4 p-6 ${statClasses(item.tone)}`}
+              className="app-panel rounded-[1.5rem] border-l-4 border-l-blue-600 p-6"
             >
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                 {item.title}
               </p>
               <div className="mt-4 flex items-end gap-2">
-                <span
-                  className={`text-4xl font-black tracking-tight ${
-                    item.tone === "red"
-                      ? "text-rose-500"
-                      : "text-slate-900 dark:text-white"
-                  }`}
-                >
+                <span className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
                   {item.value}
-                </span>
-                <span
-                  className={`pb-1 text-sm font-bold ${
-                    item.tone === "green"
-                      ? "text-emerald-500"
-                      : item.tone === "blue"
-                      ? "text-blue-500"
-                      : "text-slate-500"
-                  }`}
-                >
-                  {item.change}
                 </span>
               </div>
             </div>
@@ -175,7 +149,7 @@ export default function Workspaces() {
             />
             <input
               type="text"
-              placeholder="Search by name, role or owner..."
+              placeholder="Search by name, industry or status..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="auth-minimal-input w-full rounded-2xl py-4 pl-12 pr-4 text-sm"
@@ -186,15 +160,6 @@ export default function Workspaces() {
             <button className="blue-gradient-btn rounded-2xl px-6 py-3 text-sm font-bold text-white">
               All
             </button>
-            <button className="auth-outline-btn rounded-2xl px-5 py-3 text-sm font-semibold">
-              Production
-            </button>
-            <button className="auth-outline-btn rounded-2xl px-5 py-3 text-sm font-semibold">
-              Staging
-            </button>
-            <button className="auth-outline-btn rounded-2xl px-5 py-3 text-sm font-semibold">
-              Archived
-            </button>
             <button className="auth-outline-btn flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold">
               Status
               <Filter size={15} />
@@ -202,121 +167,113 @@ export default function Workspaces() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredWorkspaces.map((workspace) => (
-            <div
-              key={workspace.id}
-              className={`app-panel overflow-hidden rounded-[1.75rem] ${
-                workspace.statusTone === "red" ? "border-rose-500/20" : ""
-              }`}
-            >
+        {loading ? (
+          <div className="app-panel rounded-3xl p-10 text-center text-slate-500 dark:text-slate-400">
+            Loading workspaces...
+          </div>
+        ) : error ? (
+          <div className="rounded-3xl border border-red-200 bg-red-50 p-10 text-center text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {filteredWorkspaces.map((workspace) => (
               <div
-                className={`relative h-24 border-b border-slate-200/10 bg-gradient-to-r ${workspace.heroTone} p-6 dark:border-white/10`}
+                key={workspace.id}
+                className="app-panel overflow-hidden rounded-[1.75rem]"
               >
-                <div className="absolute -bottom-8 left-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg font-black text-slate-900 shadow-xl dark:border-white/10 dark:bg-[#111318] dark:text-white">
-                  {workspace.logoText}
-                </div>
-
-                <span
-                  className={`ml-auto inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${badgeClasses(
-                    workspace.statusTone
-                  )}`}
-                >
-                  {workspace.status}
-                </span>
-              </div>
-
-              <div className="px-6 pb-6 pt-12">
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <button
-                      onClick={() => navigate(`/workspaces/${workspace.id}`)}
-                      className="text-left text-2xl font-black tracking-tight text-slate-900 transition hover:text-blue-600 dark:text-white"
-                    >
-                      {workspace.name}
-                    </button>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {workspace.subtitle}
-                    </p>
+                <div className="relative h-24 border-b border-slate-200/10 bg-gradient-to-r from-blue-600/20 to-transparent p-6 dark:border-white/10">
+                  <div
+                    className="absolute -bottom-8 left-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg font-black text-slate-900 shadow-xl dark:border-white/10 dark:bg-[#111318] dark:text-white"
+                    style={{ backgroundColor: workspace.brandColor || undefined }}
+                  >
+                    {workspace.name?.slice(0, 2).toUpperCase()}
                   </div>
 
-                  <button className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-white/[0.04]">
-                    <MoreHorizontal size={18} />
-                  </button>
+                  <span
+                    className={`ml-auto inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${badgeClasses(
+                      workspace.status
+                    )}`}
+                  >
+                    {workspace.status}
+                  </span>
                 </div>
 
-                <div className="mb-6 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-slate-200/60 bg-slate-50/40 p-4 dark:border-white/10 dark:bg-white/[0.02]">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                      My Role
-                    </p>
-                    <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
-                      {workspace.role}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200/60 bg-slate-50/40 p-4 dark:border-white/10 dark:bg-white/[0.02]">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                      Last Activity
-                    </p>
-                    <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
-                      {workspace.lastActivity}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-4">
-                  {workspace.issue ? (
-                    <div className="flex items-center gap-2 text-sm font-bold text-rose-500">
-                      <AlertCircle size={16} />
-                      {workspace.issue}
+                <div className="px-6 pb-6 pt-12">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <button
+                        onClick={() => navigate(`/workspaces/${workspace.id}`)}
+                        className="text-left text-2xl font-black tracking-tight text-slate-900 transition hover:text-blue-600 dark:text-white"
+                      >
+                        {workspace.name}
+                      </button>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {workspace.metaBusinessName || workspace.industry || "-"}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="flex -space-x-2">
-                      {workspace.members.map((member) => (
-                        <div
-                          key={member}
-                          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-black text-slate-700 dark:border-[#0f1115] dark:bg-[#1a1f2b] dark:text-slate-300"
-                        >
-                          {member}
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
-                  {workspace.issue ? (
-                    <button className="rounded-xl bg-rose-500 px-5 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-white transition hover:bg-rose-600">
-                      Resolve
+                    <button className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-white/[0.04]">
+                      <MoreHorizontal size={18} />
                     </button>
-                  ) : (
+                  </div>
+
+                  <div className="mb-6 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-slate-200/60 bg-slate-50/40 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        Region
+                      </p>
+                      <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                        {workspace.region || "-"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200/60 bg-slate-50/40 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        Timezone
+                      </p>
+                      <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                        {workspace.timezone || "-"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                      {workspace.primaryContactEmail || "-"}
+                    </div>
+
                     <button
-                      onClick={() => navigate(`/workspaces/${workspace.id}`)}
+                      onClick={() => {
+                        setSelectedWorkspace(workspace);
+                        navigate(`/workspaces/${workspace.id}`);
+                      }}
                       className="flex items-center gap-1 text-sm font-black text-blue-600 transition hover:translate-x-1 dark:text-blue-400"
                     >
                       Enter Workspace
                       <ArrowRight size={15} />
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          <button
-            onClick={() => navigate("/workspaces/create")}
-            className="flex min-h-[360px] flex-col items-center justify-center rounded-[1.75rem] border-2 border-dashed border-blue-500/30 bg-transparent p-8 transition hover:border-blue-500/60 hover:bg-blue-500/[0.03]"
-          >
-            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-blue-500/20 bg-slate-100 text-blue-600 dark:bg-white/[0.03] dark:text-blue-400">
-              <PlusCircle size={28} />
-            </div>
-            <p className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-              Create New Workspace
-            </p>
-            <p className="mt-3 max-w-[220px] text-center text-base text-slate-500 dark:text-slate-400">
-              Launch a new collaborative environment for your brand.
-            </p>
-          </button>
-        </div>
+            <button
+              onClick={() => navigate("/workspaces/create")}
+              className="flex min-h-[360px] flex-col items-center justify-center rounded-[1.75rem] border-2 border-dashed border-blue-500/30 bg-transparent p-8 transition hover:border-blue-500/60 hover:bg-blue-500/[0.03]"
+            >
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-blue-500/20 bg-slate-100 text-blue-600 dark:bg-white/[0.03] dark:text-blue-400">
+                <PlusCircle size={28} />
+              </div>
+              <p className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                Create New Workspace
+              </p>
+              <p className="mt-3 max-w-[220px] text-center text-base text-slate-500 dark:text-slate-400">
+                Launch a new collaborative environment for your brand.
+              </p>
+            </button>
+          </div>
+        )}
       </div>
     </AppShell>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
   ArrowLeft,
@@ -9,28 +9,30 @@ import {
   Facebook,
   Instagram,
   Save,
-  Pencil,
+  X,
 } from "lucide-react";
+import { createBrandApi } from "../../lib/api";
 
-export default function EditBrand() {
+export default function AddBrand() {
   const navigate = useNavigate();
-  const { brandId } = useParams();
 
   const [form, setForm] = useState({
-    brandName: "Aether Dynamics",
-    brandId: brandId || "BND-8821",
+    brandName: "",
+    brandId: "",
     industry: "Technology & SaaS",
-    website: "https://aetherdynamics.com",
-    metaBusiness: "Aether Dynamics Business Manager",
-    status: "Active",
-    description:
-      "Premium brand identity focused on global operations, campaign performance, and enterprise Meta workspace management.",
-    pages: "12",
-    campaigns: "24",
-    revenue: "$1.2M",
+    website: "",
+    metaBusiness: "",
+    status: "active",
+    description: "",
+    pages: "",
+    campaigns: "",
+    revenue: "",
     connectFacebook: true,
     connectInstagram: true,
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -40,9 +42,19 @@ export default function EditBrand() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate(`/brands/${form.brandId}`);
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await createBrandApi(form);
+      navigate(`/brands/${res.brand.id}`);
+    } catch (err) {
+      setError(err.message || "Failed to create brand");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,29 +63,44 @@ export default function EditBrand() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <button
-              onClick={() => navigate(`/brands/${brandId}`)}
+              onClick={() => navigate("/brands")}
               className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-blue-600 dark:text-slate-400"
             >
               <ArrowLeft size={16} />
-              Back to Brand Detail
+              Back to Brands
             </button>
 
             <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-              Edit Brand
+              Add Brand
             </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Update identity, workspace, and business connection details for this brand.
+              Create a new enterprise brand workspace and configure its primary business details.
             </p>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
-          >
-            <Save size={16} />
-            Save Changes
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate("/brands")}
+              className="auth-outline-btn rounded-xl px-5 py-3 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              <Save size={16} />
+              {loading ? "Saving..." : "Save Brand"}
+            </button>
+          </div>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <section className="app-panel rounded-[2rem] p-8">
@@ -100,6 +127,7 @@ export default function EditBrand() {
                   name="brandName"
                   value={form.brandName}
                   onChange={handleChange}
+                  placeholder="Aether Dynamics"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -112,6 +140,7 @@ export default function EditBrand() {
                   name="brandId"
                   value={form.brandId}
                   onChange={handleChange}
+                  placeholder="BND-1001"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -145,9 +174,9 @@ export default function EditBrand() {
                   onChange={handleChange}
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 >
-                  <option>Active</option>
-                  <option>Paused</option>
-                  <option>Draft</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="draft">Draft</option>
                 </select>
               </div>
 
@@ -160,6 +189,7 @@ export default function EditBrand() {
                   value={form.description}
                   onChange={handleChange}
                   rows={4}
+                  placeholder="Short brand summary..."
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -176,7 +206,7 @@ export default function EditBrand() {
                   Business & Meta Details
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Connected business manager and performance references.
+                  Connected business manager and brand performance references.
                 </p>
               </div>
             </div>
@@ -195,6 +225,7 @@ export default function EditBrand() {
                     name="website"
                     value={form.website}
                     onChange={handleChange}
+                    placeholder="https://example.com"
                     className="auth-minimal-input w-full rounded-xl py-3 pl-11 pr-4 text-sm"
                   />
                 </div>
@@ -208,6 +239,7 @@ export default function EditBrand() {
                   name="metaBusiness"
                   value={form.metaBusiness}
                   onChange={handleChange}
+                  placeholder="Aether Dynamics Business Manager"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -220,6 +252,7 @@ export default function EditBrand() {
                   name="pages"
                   value={form.pages}
                   onChange={handleChange}
+                  placeholder="12"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -232,6 +265,7 @@ export default function EditBrand() {
                   name="campaigns"
                   value={form.campaigns}
                   onChange={handleChange}
+                  placeholder="24"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -244,6 +278,7 @@ export default function EditBrand() {
                   name="revenue"
                   value={form.revenue}
                   onChange={handleChange}
+                  placeholder="$1.2M"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -256,7 +291,7 @@ export default function EditBrand() {
                 Channel Connections
               </h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Enable or disable connected social channels for this brand.
+                Select which platforms should be enabled for this brand.
               </p>
             </div>
 
@@ -271,7 +306,7 @@ export default function EditBrand() {
                       Facebook
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Facebook pages and lead forms
+                      Enable Facebook pages and lead forms
                     </p>
                   </div>
                 </div>
@@ -295,7 +330,7 @@ export default function EditBrand() {
                       Instagram
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Instagram inbox and campaigns
+                      Enable Instagram inbox and campaigns
                     </p>
                   </div>
                 </div>
@@ -314,18 +349,20 @@ export default function EditBrand() {
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 dark:border-white/10 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => navigate(`/brands/${brandId}`)}
-              className="auth-outline-btn rounded-xl px-6 py-3 text-sm font-semibold"
+              onClick={() => navigate("/brands")}
+              className="auth-outline-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold"
             >
+              <X size={16} />
               Cancel
             </button>
 
             <button
               type="submit"
-              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              <Pencil size={16} />
-              Update Brand
+              <Save size={16} />
+              {loading ? "Creating..." : "Create Brand"}
             </button>
           </div>
         </form>

@@ -2,13 +2,17 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "../../layouts/AuthLayout";
 import logo from "../../assets/logo.png";
+import { getResetEmail, setResetEmail, verifyOtpApi } from "../../lib/api";
 
 const OTP_LENGTH = 6;
 
 export default function VerifyOtp() {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const inputsRef = useRef([]);
+  const email = getResetEmail();
 
   const handleChange = (index, value) => {
     const cleanValue = value.replace(/\D/g, "").slice(0, 1);
@@ -49,9 +53,37 @@ export default function VerifyOtp() {
     inputsRef.current[focusIndex]?.focus();
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/reset-password");
+    setError("");
+
+    const code = otp.join("");
+
+    if (!email) {
+      setError("Reset email not found. Please try forgot password again.");
+      return;
+    }
+
+    if (code.length !== OTP_LENGTH) {
+      setError("Please enter the complete 6-digit code");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await verifyOtpApi({
+        email,
+        otp: code,
+      });
+
+      setResetEmail(email);
+      navigate("/reset-password");
+    } catch (err) {
+      setError(err.message || "OTP verification failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,7 +110,7 @@ export default function VerifyOtp() {
             <p className="mt-3 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
               We&apos;ve sent a 6-digit code to your email.
               <br />
-              Please enter it below.
+              {email ? `Email: ${email}` : "Please enter it below."}
             </p>
           </div>
 
@@ -103,23 +135,20 @@ export default function VerifyOtp() {
               ))}
             </div>
 
+            {error ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                {error}
+              </div>
+            ) : null}
+
             <button
               type="submit"
-              className="blue-gradient-btn w-full rounded-xl py-4 font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn w-full rounded-xl py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Verify Code
+              {loading ? "Verifying..." : "Verify Code"}
             </button>
           </form>
-
-          <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
-            Didn&apos;t receive the code?
-            <button
-              type="button"
-              className="ml-1 font-medium text-blue-500 transition hover:text-blue-400"
-            >
-              Resend
-            </button>
-          </div>
         </section>
 
         <div className="mt-12 text-center text-xs text-slate-500 dark:text-slate-500">

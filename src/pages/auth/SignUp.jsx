@@ -1,22 +1,81 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthLayout from "../../layouts/AuthLayout";
 import logo from "../../assets/logo.png";
-import { Eye, EyeOff, ArrowRight, User, Mail, Lock, ShieldCheck } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  ArrowRight,
+  User,
+  Mail,
+  Lock,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  getInvitationByTokenApi,
+  signupWithInvitationApi,
+} from "../../lib/api";
 
 export default function SignUp() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") || "";
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [loadingInvite, setLoadingInvite] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const [invitation, setInvitation] = useState(null);
+
   const [form, setForm] = useState({
     fullName: "",
-    email: "alex.chen@enterprise.com",
+    email: "",
     password: "",
     confirmPassword: "",
     terms: false,
   });
+
+  useEffect(() => {
+    async function loadInvitation() {
+      setInviteError("");
+      setLoadingInvite(true);
+
+      try {
+        if (!token) {
+          throw new Error("Invitation token is missing");
+        }
+
+        const data = await getInvitationByTokenApi(token);
+        const invite = data.invitation;
+
+        setInvitation(invite);
+        setForm((prev) => ({
+          ...prev,
+          email: invite.email || "",
+        }));
+      } catch (err) {
+        setInviteError(err.message || "Failed to load invitation");
+      } finally {
+        setLoadingInvite(false);
+      }
+    }
+
+    loadInvitation();
+  }, [token]);
+
+  const inviterInitials = useMemo(() => {
+    const fullName = invitation?.inviter?.full_name || "Admin User";
+    return fullName
+      .split(" ")
+      .map((item) => item[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }, [invitation]);
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
@@ -26,21 +85,111 @@ export default function SignUp() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/workspace-selection");
+    setFormError("");
+
+    if (!token) {
+      setFormError("Invitation token is missing");
+      return;
+    }
+
+    if (!form.fullName.trim()) {
+      setFormError("Full name is required");
+      return;
+    }
+
+    if (!form.password || form.password.length < 8) {
+      setFormError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setFormError("Passwords do not match");
+      return;
+    }
+
+    if (!form.terms) {
+      setFormError("Please accept the terms to continue");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await signupWithInvitationApi({
+        inviteToken: token,
+        fullName: form.fullName.trim(),
+        password: form.password,
+      });
+
+      navigate("/login");
+    } catch (err) {
+      setFormError(err.message || "Failed to complete account setup");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loadingInvite) {
+    return (
+      <AuthLayout showHelp={false}>
+        <main className="mx-auto w-full max-w-[1100px]">
+          <div className="mb-8 flex justify-center">
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Mahimedia Solutions" className="h-10 w-10 object-contain" />
+              <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Mahimedia<span className="text-blue-500">.</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="auth-glass-card rounded-[28px] p-10 text-center">
+            <p className="text-slate-500 dark:text-slate-400">Loading invitation...</p>
+          </div>
+        </main>
+      </AuthLayout>
+    );
+  }
+
+  if (inviteError || !invitation) {
+    return (
+      <AuthLayout showHelp={false}>
+        <main className="mx-auto w-full max-w-[800px]">
+          <div className="mb-8 flex justify-center">
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Mahimedia Solutions" className="h-10 w-10 object-contain" />
+              <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Mahimedia<span className="text-blue-500">.</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="auth-glass-card rounded-[28px] p-10 text-center">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
+              Invitation Unavailable
+            </h1>
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+              {inviteError || "This invitation is invalid or expired."}
+            </p>
+            <Link
+              to="/login"
+              className="mt-6 inline-flex rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white"
+            >
+              Back to Login
+            </Link>
+          </div>
+        </main>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout showHelp={false}>
       <main className="mx-auto w-full max-w-[1100px]">
         <div className="mb-8 flex justify-center">
           <div className="flex items-center gap-3">
-            <img
-              src={logo}
-              alt="Mahimedia Solutions"
-              className="h-10 w-10 object-contain"
-            />
+            <img src={logo} alt="Mahimedia Solutions" className="h-10 w-10 object-contain" />
             <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Mahimedia<span className="text-blue-500">.</span>
             </span>
@@ -154,11 +303,7 @@ export default function SignUp() {
                       onClick={() => setShowConfirmPassword((prev) => !prev)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
                     >
-                      {showConfirmPassword ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
@@ -185,12 +330,19 @@ export default function SignUp() {
                 </span>
               </label>
 
+              {formError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                  {formError}
+                </div>
+              ) : null}
+
               <button
                 type="submit"
-                className="blue-gradient-btn flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold text-white"
+                disabled={submitting}
+                className="blue-gradient-btn flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Accept Invitation &amp; Setup Account
-                <ArrowRight size={18} />
+                {submitting ? "Setting Up..." : "Accept Invitation & Setup Account"}
+                {!submitting && <ArrowRight size={18} />}
               </button>
             </form>
 
@@ -216,10 +368,10 @@ export default function SignUp() {
               <div className="space-y-6">
                 <div className="border-b border-slate-200 pb-4 dark:border-white/10">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Invited Brand
+                    Invited Workspace
                   </p>
                   <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                    Allianz 3
+                    {invitation?.workspace?.name || "-"}
                   </p>
                 </div>
 
@@ -228,7 +380,7 @@ export default function SignUp() {
                     Assigned Role
                   </p>
                   <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                    Marketing Manager
+                    {invitation?.member_role || "workspace_editor"}
                   </p>
                 </div>
 
@@ -238,10 +390,10 @@ export default function SignUp() {
                   </p>
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-500/10 font-bold text-blue-500">
-                      SJ
+                      {inviterInitials}
                     </div>
                     <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Sarah Johnson
+                      {invitation?.inviter?.full_name || "Workspace Admin"}
                     </p>
                   </div>
                 </div>

@@ -2,9 +2,11 @@ import { useNavigate } from "react-router-dom";
 import AuthLayout from "../../layouts/AuthLayout";
 import logo from "../../assets/logo.png";
 import { ShieldAlert, LayoutDashboard, Building2, LifeBuoy } from "lucide-react";
+import { getSelectedWorkspace } from "../../lib/api";
 
 export default function AccessDenied() {
   const navigate = useNavigate();
+  const selectedWorkspace = getSelectedWorkspace();
 
   return (
     <AuthLayout showHelp={false}>
@@ -65,6 +67,13 @@ export default function AccessDenied() {
 
             <button
               type="button"
+              onClick={() =>
+                window.alert(
+                  selectedWorkspace
+                    ? `Contact admin for workspace: ${selectedWorkspace.name}`
+                    : "Contact your administrator."
+                )
+              }
               className="auth-outline-btn flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold"
             >
               <LifeBuoy size={18} />

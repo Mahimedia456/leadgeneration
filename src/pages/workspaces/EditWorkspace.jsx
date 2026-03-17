@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -9,45 +9,76 @@ import {
   Lock,
   Zap,
   X,
-  UserPlus,
-  Trash2,
   Save,
 } from "lucide-react";
+import {
+  getStoredUser,
+  getWorkspaceByIdApi,
+  updateWorkspaceApi,
+} from "../../lib/api";
 
-const stepLabels = ["Basic Info", "Brand Assets", "Team Access", "Review"];
-
-const initialTeam = [
-  { name: "Sarah Chen", email: "sarah.c@acme.com", role: "Owner" },
-  { name: "James Wilson", email: "j.wilson@acme.com", role: "Editor" },
-  { name: "Elena Rodriguez", email: "elena.r@acme.com", role: "Viewer" },
-];
+const stepLabels = ["Basic Info", "Brand Assets", "Review"];
 
 export default function EditWorkspace() {
   const navigate = useNavigate();
-  const { workspaceId = "WS-1001" } = useParams();
+  const { workspaceId } = useParams();
+  const user = getStoredUser();
+
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
-    name: "Acme Enterprise Solutions",
+    name: "",
     industry: "Technology & Software",
-    email: "admin@enterprise.com",
-    logo: "",
+    email: "",
+    logoUrl: "",
     color: "#1152d4",
-    description:
-      "Global operations management workspace for our primary engineering and marketing departments.",
+    description: "",
     region: "North America (Virginia)",
     timezone: "(GMT-05:00) Eastern Time (US & Canada)",
-    slug: "solutions",
+    metaBusinessName: "",
   });
 
-  const [team, setTeam] = useState(initialTeam);
-  const [memberName, setMemberName] = useState("");
-  const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState("Viewer");
+  useEffect(() => {
+    async function loadWorkspace() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const data = await getWorkspaceByIdApi(workspaceId);
+        const workspace = data.workspace;
+
+        setForm({
+          name: workspace.name || "",
+          industry: workspace.industry || "Technology & Software",
+          email: workspace.primaryContactEmail || "",
+          logoUrl: workspace.logoUrl || "",
+          color: workspace.brandColor || "#1152d4",
+          description: workspace.description || "",
+          region: workspace.region || "North America (Virginia)",
+          timezone:
+            workspace.timezone || "(GMT-05:00) Eastern Time (US & Canada)",
+          metaBusinessName: workspace.metaBusinessName || "",
+        });
+      } catch (err) {
+        if (err.statusCode === 403) {
+          navigate("/access-denied");
+          return;
+        }
+        setError(err.message || "Failed to load workspace");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadWorkspace();
+  }, [workspaceId, navigate]);
 
   const canContinue = useMemo(() => {
     if (step === 1) {
-      return form.name.trim() && form.email.trim() && form.slug.trim();
+      return form.name.trim() && form.email.trim();
     }
     return true;
   }, [step, form]);
@@ -56,44 +87,58 @@ export default function EditWorkspace() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const addMember = () => {
-    if (!memberName.trim() || !memberEmail.trim()) return;
-
-    const exists = team.some(
-      (item) => item.email.toLowerCase() === memberEmail.trim().toLowerCase()
-    );
-    if (exists) return;
-
-    setTeam((prev) => [
-      ...prev,
-      {
-        name: memberName.trim(),
-        email: memberEmail.trim(),
-        role: memberRole,
-      },
-    ]);
-
-    setMemberName("");
-    setMemberEmail("");
-    setMemberRole("Viewer");
-  };
-
-  const removeMember = (email) => {
-    setTeam((prev) => prev.filter((item) => item.email !== email));
-  };
-
   const nextStep = () => {
     if (!canContinue) return;
-    if (step < 4) setStep((prev) => prev + 1);
+    if (step < 3) setStep((prev) => prev + 1);
   };
 
   const prevStep = () => {
     if (step > 1) setStep((prev) => prev - 1);
   };
 
-  const handleSave = () => {
-    navigate(`/workspaces/${workspaceId}`);
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+
+    try {
+      await updateWorkspaceApi(workspaceId, {
+        name: form.name,
+        metaBusinessName: form.metaBusinessName,
+        description: form.description,
+        industry: form.industry,
+        primaryContactEmail: form.email,
+        logoUrl: form.logoUrl,
+        brandColor: form.color,
+        region: form.region,
+        timezone: form.timezone,
+      });
+
+      navigate(`/workspaces/${workspaceId}`);
+    } catch (err) {
+      if (err.statusCode === 403) {
+        navigate("/access-denied");
+        return;
+      }
+      setError(err.message || "Failed to save workspace");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (user?.globalRole !== "admin") {
+    navigate("/access-denied");
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel rounded-3xl p-10 text-center text-slate-500 dark:text-slate-400">
+          Loading workspace...
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -111,7 +156,7 @@ export default function EditWorkspace() {
 
                 <div>
                   <p className="text-xl font-black uppercase tracking-tight text-white">
-                    Nexus Enterprise
+                    Mahimedia Solutions
                   </p>
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                     Workspace Editor
@@ -135,8 +180,7 @@ export default function EditWorkspace() {
                   Edit Workspace
                 </h1>
                 <p className="mt-4 text-lg text-slate-400">
-                  Update your collaborative environment, brand presence, and team
-                  access.
+                  Update your collaborative environment and brand presence.
                 </p>
               </div>
 
@@ -189,8 +233,21 @@ export default function EditWorkspace() {
                           type="text"
                           value={form.name}
                           onChange={(e) => updateField("name", e.target.value)}
-                          placeholder="e.g. Global Marketing Hub"
-                          className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 placeholder:text-slate-600"
+                          className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-bold uppercase tracking-[0.16em] text-slate-400">
+                          Meta Business Name
+                        </label>
+                        <input
+                          type="text"
+                          value={form.metaBusinessName}
+                          onChange={(e) =>
+                            updateField("metaBusinessName", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none"
                         />
                       </div>
 
@@ -201,13 +258,13 @@ export default function EditWorkspace() {
                         <select
                           value={form.industry}
                           onChange={(e) => updateField("industry", e.target.value)}
-                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none"
                         >
                           <option>Technology & Software</option>
                           <option>Finance & Fintech</option>
+                          <option>Marketing & Media</option>
                           <option>Healthcare</option>
                           <option>Manufacturing</option>
-                          <option>Media & Entertainment</option>
                         </select>
                       </div>
 
@@ -219,45 +276,25 @@ export default function EditWorkspace() {
                           type="email"
                           value={form.email}
                           onChange={(e) => updateField("email", e.target.value)}
-                          placeholder="admin@enterprise.com"
-                          className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 placeholder:text-slate-600"
+                          className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none"
                         />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-bold uppercase tracking-[0.16em] text-slate-400">
-                          Workspace URL
-                        </label>
-
-                        <div className="flex overflow-hidden rounded-xl border border-blue-500/20 bg-white/5">
-                          <span className="inline-flex items-center border-r border-blue-500/20 px-4 text-sm text-slate-500">
-                            acme.app/
-                          </span>
-                          <input
-                            type="text"
-                            value={form.slug}
-                            onChange={(e) => updateField("slug", e.target.value)}
-                            placeholder="workspace-slug"
-                            className="w-full bg-transparent px-4 py-3 text-white outline-none placeholder:text-slate-600"
-                          />
-                        </div>
                       </div>
                     </div>
 
                     <div className="space-y-6">
                       <div>
                         <label className="mb-2 block text-sm font-bold uppercase tracking-[0.16em] text-slate-400">
-                          Workspace Logo
+                          Workspace Logo URL
                         </label>
 
-                        <div className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 transition hover:bg-blue-500/10">
+                        <div className="flex h-32 flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5">
                           <CloudUpload className="mb-2 text-blue-500" size={28} />
-                          <p className="text-sm font-medium text-slate-300">
-                            Click or drag to replace logo
-                          </p>
-                          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                            PNG, SVG up to 5MB
-                          </p>
+                          <input
+                            type="text"
+                            value={form.logoUrl}
+                            onChange={(e) => updateField("logoUrl", e.target.value)}
+                            className="w-[85%] rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none"
+                          />
                         </div>
                       </div>
 
@@ -282,24 +319,6 @@ export default function EditWorkspace() {
                               Primary Accent
                             </p>
                           </div>
-
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => updateField("color", "#94a3b8")}
-                              className="h-4 w-4 rounded-full bg-slate-400"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => updateField("color", "#10b981")}
-                              className="h-4 w-4 rounded-full bg-emerald-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => updateField("color", "#4f46e5")}
-                              className="h-4 w-4 rounded-full bg-indigo-600"
-                            />
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -318,8 +337,7 @@ export default function EditWorkspace() {
                         onChange={(e) =>
                           updateField("description", e.target.value)
                         }
-                        placeholder="Describe the purpose, teams, and operating scope of this workspace..."
-                        className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 placeholder:text-slate-600"
+                        className="w-full rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none"
                       />
                     </div>
 
@@ -331,7 +349,7 @@ export default function EditWorkspace() {
                         <select
                           value={form.region}
                           onChange={(e) => updateField("region", e.target.value)}
-                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none"
                         >
                           <option>North America (Virginia)</option>
                           <option>Europe (Frankfurt)</option>
@@ -346,11 +364,12 @@ export default function EditWorkspace() {
                         <select
                           value={form.timezone}
                           onChange={(e) => updateField("timezone", e.target.value)}
-                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                          className="w-full rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none"
                         >
                           <option>(GMT-05:00) Eastern Time (US & Canada)</option>
                           <option>(GMT+00:00) London</option>
                           <option>(GMT+01:00) Paris</option>
+                          <option>(GMT+08:00) Singapore</option>
                         </select>
                       </div>
                     </div>
@@ -358,103 +377,6 @@ export default function EditWorkspace() {
                 )}
 
                 {step === 3 && (
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                      <input
-                        type="text"
-                        placeholder="Member name"
-                        value={memberName}
-                        onChange={(e) => setMemberName(e.target.value)}
-                        className="rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 placeholder:text-slate-600"
-                      />
-
-                      <input
-                        type="email"
-                        placeholder="Member email"
-                        value={memberEmail}
-                        onChange={(e) => setMemberEmail(e.target.value)}
-                        className="rounded-xl border border-blue-500/20 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 placeholder:text-slate-600"
-                      />
-
-                      <select
-                        value={memberRole}
-                        onChange={(e) => setMemberRole(e.target.value)}
-                        className="rounded-xl border border-blue-500/20 bg-[#0f1115] px-4 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
-                      >
-                        <option>Owner</option>
-                        <option>Administrator</option>
-                        <option>Editor</option>
-                        <option>Viewer</option>
-                      </select>
-
-                      <button
-                        onClick={addMember}
-                        className="blue-gradient-btn flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white"
-                      >
-                        <UserPlus size={16} />
-                        Add Member
-                      </button>
-                    </div>
-
-                    <div className="overflow-hidden rounded-2xl border border-blue-500/10">
-                      <table className="w-full text-left">
-                        <thead className="bg-white/[0.03]">
-                          <tr>
-                            <th className="px-6 py-4 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                              Name
-                            </th>
-                            <th className="px-6 py-4 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                              Email
-                            </th>
-                            <th className="px-6 py-4 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                              Role
-                            </th>
-                            <th className="px-6 py-4 text-right text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
-
-                        <tbody className="divide-y divide-white/5">
-                          {team.map((member) => (
-                            <tr key={member.email}>
-                              <td className="px-6 py-4 font-bold text-white">
-                                {member.name}
-                              </td>
-                              <td className="px-6 py-4 text-slate-400">
-                                {member.email}
-                              </td>
-                              <td className="px-6 py-4 text-slate-300">
-                                {member.role}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <button
-                                  onClick={() => removeMember(member.email)}
-                                  className="rounded-xl p-2 text-rose-500 transition hover:bg-rose-500/10"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-
-                          {!team.length && (
-                            <tr>
-                              <td
-                                colSpan={4}
-                                className="px-6 py-8 text-center text-sm text-slate-500"
-                              >
-                                No team members added yet.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {step === 4 && (
                   <div className="space-y-8">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                       <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5">
@@ -486,45 +408,11 @@ export default function EditWorkspace() {
 
                       <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                          Workspace URL
-                        </p>
-                        <p className="mt-2 text-base font-bold text-white">
-                          acme.app/{form.slug || "—"}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
                           Region
                         </p>
                         <p className="mt-2 text-base font-bold text-white">
                           {form.region}
                         </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                          Timezone
-                        </p>
-                        <p className="mt-2 text-base font-bold text-white">
-                          {form.timezone}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5 md:col-span-2">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                          Identity Color
-                        </p>
-
-                        <div className="mt-2 flex items-center gap-3">
-                          <div
-                            className="h-8 w-8 rounded-lg border border-white/10"
-                            style={{ backgroundColor: form.color }}
-                          />
-                          <span className="text-base font-bold text-white">
-                            {form.color.toUpperCase()}
-                          </span>
-                        </div>
                       </div>
                     </div>
 
@@ -537,33 +425,11 @@ export default function EditWorkspace() {
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-blue-500/10 bg-white/[0.03] p-5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                          Team Access
-                        </p>
-                        <span className="rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
-                          {team.length} Members
-                        </span>
+                    {error ? (
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                        {error}
                       </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                        {team.map((member) => (
-                          <div
-                            key={member.email}
-                            className="rounded-xl border border-white/5 bg-black/10 p-4"
-                          >
-                            <p className="font-bold text-white">{member.name}</p>
-                            <p className="mt-1 text-sm text-slate-400">
-                              {member.email}
-                            </p>
-                            <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-blue-500">
-                              {member.role}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -579,7 +445,7 @@ export default function EditWorkspace() {
                     {step === 1 ? "Cancel" : "Back"}
                   </button>
 
-                  {step < 4 ? (
+                  {step < 3 ? (
                     <button
                       onClick={nextStep}
                       disabled={!canContinue}
@@ -591,10 +457,11 @@ export default function EditWorkspace() {
                   ) : (
                     <button
                       onClick={handleSave}
-                      className="blue-gradient-btn flex items-center gap-2 rounded-xl px-10 py-3 text-sm font-bold uppercase tracking-[0.16em] text-white"
+                      disabled={saving}
+                      className="blue-gradient-btn flex items-center gap-2 rounded-xl px-10 py-3 text-sm font-bold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Save size={16} />
-                      Save Changes
+                      {saving ? "Saving..." : "Save Changes"}
                     </button>
                   )}
                 </div>

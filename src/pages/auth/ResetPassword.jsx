@@ -1,17 +1,27 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "../../layouts/AuthLayout";
 import logo from "../../assets/logo.png";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import {
+  clearResetEmail,
+  getResetEmail,
+  resetPasswordApi,
+} from "../../lib/api";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const email = getResetEmail();
+
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState({
     password: "",
     confirmPassword: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -21,9 +31,45 @@ export default function ResetPassword() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/login");
+    setError("");
+    setSuccess("");
+
+    if (!email) {
+      setError("Reset email not found. Please restart forgot password flow.");
+      return;
+    }
+
+    if (!form.password || form.password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await resetPasswordApi({
+        email,
+        newPassword: form.password,
+      });
+
+      clearResetEmail();
+      setSuccess("Password reset successfully. Redirecting to login...");
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 1200);
+    } catch (err) {
+      setError(err.message || "Password reset failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,18 +85,18 @@ export default function ResetPassword() {
         </div>
 
         <section className="auth-glass-card animate-soft-glow rounded-[28px] p-8 shadow-2xl md:p-10">
-          <header className="mb-8 text-center">
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white md:text-3xl">
-              Create New Password
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-semibold text-slate-900 dark:text-white">
+              Reset Password
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-              Your new password must be different from previous ones.
+              {email ? `Resetting password for ${email}` : "Create your new password below."}
             </p>
-          </header>
+          </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
                 New Password
               </label>
 
@@ -66,7 +112,7 @@ export default function ResetPassword() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -74,14 +120,14 @@ export default function ResetPassword() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
                 Confirm Password
               </label>
 
               <div className="relative">
                 <input
                   name="confirmPassword"
-                  type={showConfirm ? "text" : "password"}
+                  type={showConfirmPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={form.confirmPassword}
                   onChange={handleChange}
@@ -89,43 +135,45 @@ export default function ResetPassword() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowConfirm((prev) => !prev)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"
                 >
-                  {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            <div className="rounded-lg border border-blue-500/10 bg-blue-500/5 p-3 text-xs text-slate-500 dark:text-slate-400">
-              <ul className="list-inside list-disc space-y-1">
-                <li>Minimum 8 characters</li>
-                <li>One special character</li>
-                <li>One uppercase letter</li>
-              </ul>
-            </div>
+            {error ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                {error}
+              </div>
+            ) : null}
+
+            {success ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                {success}
+              </div>
+            ) : null}
 
             <button
               type="submit"
-              className="blue-gradient-btn w-full rounded-xl px-6 py-4 font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Update Password
+              {loading ? "Updating..." : "Update Password"}
             </button>
           </form>
 
-          <footer className="mt-8 text-center">
+          <div className="mt-8 text-center">
             <Link
               to="/login"
-              className="text-sm text-slate-500 transition hover:text-blue-400"
+              className="inline-flex items-center justify-center gap-2 text-sm text-slate-500 transition hover:text-blue-400"
             >
+              <ArrowLeft size={16} />
               Back to Login
             </Link>
-          </footer>
+          </div>
         </section>
-
-        <div className="mt-8 text-center text-xs text-slate-500">
-          © 2025 Mahimedia Solutions
-        </div>
       </main>
     </AuthLayout>
   );

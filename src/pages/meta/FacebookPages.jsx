@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -13,109 +13,15 @@ import {
   MoreHorizontal,
   ChevronLeft,
   ChevronRight,
-  Trash2,
   Eye,
-  Settings,
   AlertTriangle,
   Link2,
   CheckCircle2,
   Clock3,
   Layers3,
+  LoaderCircle,
 } from "lucide-react";
-
-const initialPageStats = [
-  {
-    title: "Total Pages",
-    value: "24",
-    change: "+12%",
-    icon: FileText,
-    tone: "blue",
-  },
-  {
-    title: "Active Sync",
-    value: "21",
-    change: "Active",
-    icon: RefreshCcw,
-    tone: "emerald",
-  },
-  {
-    title: "Total Leads (24h)",
-    value: "1,284",
-    change: "High Vol",
-    icon: Users,
-    tone: "amber",
-  },
-  {
-    title: "Disconnected",
-    value: "3",
-    change: "Critical",
-    icon: Unplug,
-    tone: "rose",
-  },
-];
-
-const initialPages = [
-  {
-    id: "PG-8291048293",
-    name: "Lumina Electronics",
-    brand: "Tech Global",
-    leadCount: 428,
-    leadChange: "+12%",
-    status: "Synced",
-    logoBg: "from-sky-950 to-blue-700",
-  },
-  {
-    id: "PG-2194820194",
-    name: "Eco Living Essentials",
-    brand: "Sustainable Co.",
-    leadCount: 82,
-    leadChange: "-4%",
-    status: "Pending Sync",
-    logoBg: "from-emerald-950 to-emerald-700",
-  },
-  {
-    id: "PG-9402910482",
-    name: "Velocity Sportswear",
-    brand: "Velocity Inc.",
-    leadCount: 1029,
-    leadChange: "+52%",
-    status: "Auth Failed",
-    logoBg: "from-rose-950 to-rose-700",
-  },
-  {
-    id: "PG-7720918441",
-    name: "Northline Furnishings",
-    brand: "Northline Home",
-    leadCount: 314,
-    leadChange: "+8%",
-    status: "Synced",
-    logoBg: "from-slate-950 to-slate-700",
-  },
-];
-
-const quickStatus = [
-  {
-    title: "Bulk Sync Health",
-    value: "87%",
-    icon: CheckCircle2,
-    tone: "emerald",
-    note: "18 pages fully healthy",
-  },
-  {
-    title: "Failed Connections",
-    value: "03",
-    icon: AlertTriangle,
-    tone: "rose",
-    note: "Reconnect required",
-  },
-  {
-    title: "Next Sweep",
-    value: "12m",
-    icon: Clock3,
-    tone: "amber",
-    note: "Scheduled poll cycle",
-  },
-];
+import { getMetaPagesApi } from "../../lib/metaApi";
 
 function statToneClasses(tone) {
   const map = {
@@ -148,14 +54,52 @@ function statusDot(status) {
 }
 
 function leadTone(change) {
-  return change.startsWith("+") ? "text-emerald-500" : "text-slate-500";
+  return String(change).startsWith("+") ? "text-emerald-500" : "text-slate-500";
 }
 
 export default function FacebookPages() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [pages, setPages] = useState(initialPages);
+  const [pages, setPages] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await getMetaPagesApi();
+
+        const mapped = (res.items || []).map((page) => ({
+          id: page.page_id,
+          dbId: page.id,
+          name: page.page_name,
+          brand: "Current Workspace",
+          leadCount: Number(page.leads_last_24h || 0),
+          leadChange: "+0%",
+          status:
+            page.status === "connected"
+              ? "Synced"
+              : page.status === "pending"
+              ? "Pending Sync"
+              : "Auth Failed",
+          logoBg: "from-sky-950 to-blue-700",
+          raw: page,
+        }));
+
+        setPages(mapped);
+      } catch (err) {
+        setError(err.message || "Failed to load Meta pages");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
 
   const filteredPages = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -170,13 +114,65 @@ export default function FacebookPages() {
     );
   }, [query, pages]);
 
-  const handleDelete = (pageId, pageName) => {
-    const ok = window.confirm(`Disconnect "${pageName}"?`);
-    if (!ok) return;
+  const totalPages = pages.length;
+  const syncedPages = pages.filter((page) => page.status === "Synced").length;
+  const disconnectedPages = pages.filter((page) => page.status === "Auth Failed").length;
+  const totalLeads = pages.reduce((sum, page) => sum + Number(page.leadCount || 0), 0);
 
-    setPages((prev) => prev.filter((page) => page.id !== pageId));
-    setOpenMenuId(null);
-  };
+  const pageStats = [
+    {
+      title: "Total Pages",
+      value: String(totalPages),
+      change: totalPages ? "+Active" : "0",
+      icon: FileText,
+      tone: "blue",
+    },
+    {
+      title: "Active Sync",
+      value: String(syncedPages),
+      change: syncedPages ? "Active" : "Idle",
+      icon: RefreshCcw,
+      tone: "emerald",
+    },
+    {
+      title: "Total Leads (24h)",
+      value: String(totalLeads),
+      change: totalLeads ? "Live" : "No Data",
+      icon: Users,
+      tone: "amber",
+    },
+    {
+      title: "Disconnected",
+      value: String(disconnectedPages),
+      change: disconnectedPages ? "Critical" : "Healthy",
+      icon: Unplug,
+      tone: "rose",
+    },
+  ];
+
+  const quickStatus = [
+    {
+      title: "Bulk Sync Health",
+      value: `${Math.max(0, Math.min(100, totalPages ? Math.round((syncedPages / totalPages) * 100) : 0))}%`,
+      icon: CheckCircle2,
+      tone: "emerald",
+      note: `${syncedPages} pages fully healthy`,
+    },
+    {
+      title: "Failed Connections",
+      value: String(disconnectedPages).padStart(2, "0"),
+      icon: AlertTriangle,
+      tone: "rose",
+      note: "Reconnect required",
+    },
+    {
+      title: "Live Pages",
+      value: String(totalPages),
+      icon: Clock3,
+      tone: "amber",
+      note: "Workspace scope",
+    },
+  ];
 
   return (
     <AppShell>
@@ -187,7 +183,7 @@ export default function FacebookPages() {
               Facebook Pages
             </h1>
             <p className="mt-2 text-base text-slate-500 dark:text-slate-400">
-              Manage connected brand pages, monitor sync status, and track lead volume across all brands.
+              Manage connected brand pages, monitor sync status, and track lead volume across all workspace assets.
             </p>
           </div>
 
@@ -198,7 +194,7 @@ export default function FacebookPages() {
             </button>
 
             <button
-              onClick={() => navigate("/meta/pages/connect")}
+              onClick={() => navigate("/meta-connections")}
               className="blue-gradient-btn flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
             >
               <Plus size={16} />
@@ -207,8 +203,14 @@ export default function FacebookPages() {
           </div>
         </div>
 
+        {error ? (
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-500">
+            {error}
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {initialPageStats.map((item) => {
+          {pageStats.map((item) => {
             const Icon = item.icon;
             return (
               <div key={item.title} className="metric-card app-panel-glow">
@@ -267,7 +269,7 @@ export default function FacebookPages() {
 
                   <button className="auth-outline-btn flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold">
                     <Layers3 size={16} />
-                    Lead Volume: High
+                    Lead Volume: All
                   </button>
                 </div>
               </div>
@@ -301,107 +303,116 @@ export default function FacebookPages() {
               </thead>
 
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                {filteredPages.map((page) => (
-                  <tr
-                    key={page.id}
-                    className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
-                  >
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${page.logoBg} text-xs font-black text-white shadow-md`}
-                        >
-                          {page.name.slice(0, 2).toUpperCase()}
-                        </div>
-
-                        <div>
-                          <button
-                            onClick={() => navigate(`/meta/pages/${page.id}`)}
-                            className="text-left text-sm font-bold text-slate-900 transition hover:text-blue-600 dark:text-white"
-                          >
-                            {page.name}
-                          </button>
-                          <p className="mt-1 text-xs text-slate-500">ID: {page.id}</p>
-                        </div>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-12 text-center text-sm text-slate-500">
+                      <div className="inline-flex items-center gap-2">
+                        <LoaderCircle size={18} className="animate-spin" />
+                        Loading Facebook pages...
                       </div>
-                    </td>
-
-                    <td className="px-8 py-6">
-                      <span className="inline-flex rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-blue-500">
-                        {page.brand}
-                      </span>
-                    </td>
-
-                    <td className="px-8 py-6">
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">
-                          {page.leadCount.toLocaleString()}
-                        </p>
-                        <p className={`mt-1 text-xs font-bold ${leadTone(page.leadChange)}`}>
-                          {page.leadChange}
-                        </p>
-                      </div>
-                    </td>
-
-                    <td className="px-8 py-6">
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${statusClasses(
-                          page.status
-                        )}`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusDot(page.status)}`} />
-                        {page.status}
-                      </span>
-                    </td>
-
-                    <td className="relative px-8 py-6">
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() =>
-                            setOpenMenuId((prev) => (prev === page.id ? null : page.id))
-                          }
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-white/5"
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-                      </div>
-
-                      {openMenuId === page.id && (
-                        <div className="absolute right-8 top-[72px] z-20 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111111]">
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(`/meta/pages/${page.id}`);
-                            }}
-                            className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
-                          >
-                            <Eye size={16} />
-                            View Details
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(`/meta/pages/${page.id}/settings`);
-                            }}
-                            className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
-                          >
-                            <Settings size={16} />
-                            Manage Page
-                          </button>
-
-                          <button
-                            onClick={() => handleDelete(page.id, page.name)}
-                            className="flex w-full items-center gap-2 px-4 py-3 text-sm text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"
-                          >
-                            <Trash2 size={16} />
-                            Disconnect
-                          </button>
-                        </div>
-                      )}
                     </td>
                   </tr>
-                ))}
+                ) : filteredPages.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-12 text-center text-sm text-slate-500">
+                      No pages found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPages.map((page) => (
+                    <tr
+                      key={page.id}
+                      className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
+                    >
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${page.logoBg} text-xs font-black text-white shadow-md`}
+                          >
+                            {page.name.slice(0, 2).toUpperCase()}
+                          </div>
+
+                          <div>
+                            <button
+                              onClick={() => navigate(`/meta/pages/${page.id}`)}
+                              className="text-left text-sm font-bold text-slate-900 transition hover:text-blue-600 dark:text-white"
+                            >
+                              {page.name}
+                            </button>
+                            <p className="mt-1 text-xs text-slate-500">ID: {page.id}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-8 py-6">
+                        <span className="inline-flex rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-blue-500">
+                          {page.brand}
+                        </span>
+                      </td>
+
+                      <td className="px-8 py-6">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            {page.leadCount.toLocaleString()}
+                          </p>
+                          <p className={`mt-1 text-xs font-bold ${leadTone(page.leadChange)}`}>
+                            {page.leadChange}
+                          </p>
+                        </div>
+                      </td>
+
+                      <td className="px-8 py-6">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${statusClasses(
+                            page.status
+                          )}`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusDot(page.status)}`} />
+                          {page.status}
+                        </span>
+                      </td>
+
+                      <td className="relative px-8 py-6">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() =>
+                              setOpenMenuId((prev) => (prev === page.id ? null : page.id))
+                            }
+                            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-white/5"
+                          >
+                            <MoreHorizontal size={18} />
+                          </button>
+                        </div>
+
+                        {openMenuId === page.id && (
+                          <div className="absolute right-8 top-[72px] z-20 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111111]">
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                navigate(`/meta/pages/${page.id}`);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                            >
+                              <Eye size={16} />
+                              View Details
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                navigate("/meta-connections");
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                            >
+                              <Link2 size={16} />
+                              Meta Connections
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -414,7 +425,7 @@ export default function FacebookPages() {
                     Need to sync multiple pages?
                   </h3>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Launch the bulk wizard to connect up to 50 pages from Business Manager in one flow.
+                    Launch the connection flow from Meta Connections and pull all workspace pages from the active business context.
                   </p>
                 </div>
                 <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 md:flex">
@@ -423,7 +434,10 @@ export default function FacebookPages() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button className="blue-gradient-btn rounded-xl px-5 py-3 text-sm font-semibold text-white">
+                <button
+                  onClick={() => navigate("/meta-connections")}
+                  className="blue-gradient-btn rounded-xl px-5 py-3 text-sm font-semibold text-white"
+                >
                   Launch Bulk Wizard
                 </button>
                 <button className="auth-outline-btn rounded-xl px-5 py-3 text-sm font-semibold">
@@ -482,13 +496,7 @@ export default function FacebookPages() {
               <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white">
                 1
               </button>
-              <button className="auth-outline-btn flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold">
-                2
-              </button>
-              <button className="auth-outline-btn flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold">
-                3
-              </button>
-              <button className="auth-outline-btn flex h-9 w-9 items-center justify-center rounded-lg">
+              <button className="auth-outline-btn flex h-9 w-9 items-center justify-center rounded-lg opacity-50">
                 <ChevronRight size={16} />
               </button>
             </div>

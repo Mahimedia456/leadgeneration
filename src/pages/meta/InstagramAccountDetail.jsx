@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -16,104 +16,9 @@ import {
   Megaphone,
   ShieldCheck,
   TrendingUp,
+  LoaderCircle,
 } from "lucide-react";
-
-const accountsData = [
-  {
-    id: "IG-220194",
-    handle: "@fashionco_official",
-    niche: "Retail & Apparel",
-    linkedPage: "Fashion Co. Global",
-    followers: "1.2M",
-    growth: "+4.2%",
-    campaignStatus: "Active (8)",
-    permission: "Admin",
-    state: "Healthy",
-    avatarBg: "from-fuchsia-500 to-pink-600",
-    engagementRate: "3.8%",
-    reach: "842K",
-    profileHealth: 94,
-    lastSync: "4 mins ago",
-    connectedBy: "Alex Morgan",
-    businessManager: "Fashion Group Core",
-    description:
-      "Primary Instagram business account for retail campaign delivery, audience retargeting, and brand awareness.",
-  },
-  {
-    id: "IG-772031",
-    handle: "@techsolutions_hq",
-    niche: "Software & Services",
-    linkedPage: "TS Business Hub",
-    followers: "450K",
-    growth: "+1.8%",
-    campaignStatus: "Paused",
-    permission: "Editor",
-    state: "Paused",
-    avatarBg: "from-sky-500 to-blue-700",
-    engagementRate: "2.9%",
-    reach: "214K",
-    profileHealth: 76,
-    lastSync: "18 mins ago",
-    connectedBy: "Sophia Kim",
-    businessManager: "Technology Expansion BM",
-    description:
-      "B2B-focused Instagram account used for product launches, service awareness, and inbound funnel testing.",
-  },
-  {
-    id: "IG-442810",
-    handle: "@lux_footwear",
-    niche: "Action Required",
-    linkedPage: "Page disconnected",
-    followers: "2.1M",
-    growth: "+0.2%",
-    campaignStatus: "Flagged",
-    permission: "Admin",
-    state: "Flagged",
-    avatarBg: "from-rose-500 to-orange-500",
-    engagementRate: "1.7%",
-    reach: "1.04M",
-    profileHealth: 41,
-    lastSync: "53 mins ago",
-    connectedBy: "Daniel Brooks",
-    businessManager: "Luxury Retail Network",
-    description:
-      "High-follower account currently flagged because the linked Facebook page connection needs to be restored.",
-  },
-  {
-    id: "IG-662281",
-    handle: "@urbanblend.studio",
-    niche: "Home & Lifestyle",
-    linkedPage: "Urban Blend Living",
-    followers: "1.09M",
-    growth: "+3.6%",
-    campaignStatus: "Active (4)",
-    permission: "Analyst",
-    state: "Healthy",
-    avatarBg: "from-violet-500 to-indigo-700",
-    engagementRate: "4.1%",
-    reach: "693K",
-    profileHealth: 91,
-    lastSync: "7 mins ago",
-    connectedBy: "Emma Scott",
-    businessManager: "Urban Lifestyle Media",
-    description:
-      "Instagram account focused on design-led lifestyle content, lead nurturing, and performance creative distribution.",
-  },
-];
-
-const contentPerformance = [
-  { type: "Reels Campaign", impressions: "420K", engagement: "4.9%" },
-  { type: "Story Retargeting", impressions: "186K", engagement: "2.6%" },
-  { type: "Lead Form CTA", impressions: "92K", engagement: "3.1%" },
-  { type: "Organic Carousel", impressions: "61K", engagement: "5.2%" },
-];
-
-const accountEvents = [
-  { title: "Instagram sync completed", time: "4 mins ago", status: "Success" },
-  { title: "Page permissions verified", time: "21 mins ago", status: "Success" },
-  { title: "Campaign access paused", time: "1 hour ago", status: "Paused" },
-  { title: "Connection review required", time: "2 hours ago", status: "Warning" },
-];
+import { getMetaInstagramDetailApi } from "../../lib/metaApi";
 
 function statToneClasses(tone) {
   const map = {
@@ -149,14 +54,107 @@ function healthTone(health) {
   return { bar: "bg-rose-500", text: "text-rose-500" };
 }
 
+function timeAgo(dateString) {
+  if (!dateString) return "--";
+  const diff = Date.now() - new Date(dateString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hrs ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} days ago`;
+}
+
 export default function InstagramAccountDetail() {
   const navigate = useNavigate();
   const { accountId } = useParams();
 
-  const account = useMemo(
-    () => accountsData.find((item) => item.id === accountId) || accountsData[0],
-    [accountId]
-  );
+  const [account, setAccount] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await getMetaInstagramDetailApi(accountId);
+        const item = res.item;
+
+        setAccount({
+          id: item.ig_user_id,
+          handle: `@${item.username}`,
+          niche: "Instagram Business",
+          linkedPage: item.meta_pages?.page_name || "Unlinked",
+          followers: Number(item.followers_count || 0).toLocaleString(),
+          growth: "+0%",
+          campaignStatus: "Active",
+          permission: "Admin",
+          state: item.status === "connected" ? "Healthy" : "Flagged",
+          avatarBg: "from-fuchsia-500 to-pink-600",
+          engagementRate: "Live",
+          reach: Number(item.media_count || 0).toLocaleString(),
+          profileHealth: item.status === "connected" ? 94 : 42,
+          lastSync: timeAgo(item.last_synced_at),
+          connectedBy: "Workspace Admin",
+          businessManager: "Meta Workspace Connection",
+          description:
+            "Connected Instagram business account synced through the active workspace Meta connection.",
+        });
+      } catch (err) {
+        setError(err.message || "Failed to load Instagram account detail");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [accountId]);
+
+  const contentPerformance = useMemo(() => {
+    if (!account) return [];
+    return [
+      { type: "Reels Campaign", impressions: account.reach, engagement: account.engagementRate },
+      { type: "Story Retargeting", impressions: account.reach, engagement: account.engagementRate },
+      { type: "Lead Form CTA", impressions: account.reach, engagement: account.engagementRate },
+      { type: "Organic Carousel", impressions: account.reach, engagement: account.engagementRate },
+    ];
+  }, [account]);
+
+  const accountEvents = useMemo(() => {
+    if (!account) return [];
+    return [
+      { title: "Instagram sync completed", time: account.lastSync, status: "Success" },
+      { title: "Page permissions verified", time: account.lastSync, status: "Success" },
+      { title: "Campaign access monitored", time: account.lastSync, status: "Paused" },
+      { title: "Connection review required", time: account.lastSync, status: "Warning" },
+    ];
+  }, [account]);
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel p-10 text-sm text-slate-500">
+          <div className="inline-flex items-center gap-2">
+            <LoaderCircle size={18} className="animate-spin" />
+            Loading Instagram account detail...
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (error || !account) {
+    return (
+      <AppShell>
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-500">
+          {error || "Instagram account not found"}
+        </div>
+      </AppShell>
+    );
+  }
 
   const health = healthTone(account.profileHealth);
 
@@ -178,7 +176,7 @@ export default function InstagramAccountDetail() {
     {
       title: "Reach",
       value: account.reach,
-      change: "30 days",
+      change: "Media",
       icon: TrendingUp,
       tone: "indigo",
     },
@@ -202,7 +200,7 @@ export default function InstagramAccountDetail() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <button
-              onClick={() => navigate("/instagram")}
+              onClick={() => navigate("/meta/instagram")}
               className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-blue-600"
             >
               <ArrowLeft size={16} />
@@ -234,11 +232,11 @@ export default function InstagramAccountDetail() {
             </button>
 
             <button
-              onClick={() => navigate(`/meta/instagram/${account.id}/settings`)}
+              onClick={() => navigate("/meta/instagram")}
               className="blue-gradient-btn flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
             >
               <Settings size={16} />
-              Manage Access
+              Back to Instagram
             </button>
           </div>
         </div>
@@ -472,7 +470,7 @@ export default function InstagramAccountDetail() {
 
               <div className="divide-y divide-slate-200 dark:divide-white/10">
                 {accountEvents.map((event) => (
-                  <div key={event.title} className="px-6 py-4">
+                  <div key={`${event.title}-${event.time}`} className="px-6 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
                         <div

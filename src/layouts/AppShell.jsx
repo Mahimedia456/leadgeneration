@@ -37,8 +37,8 @@ const navGroups = [
   {
     label: "Campaigns & Social",
     items: [
-      { to: "/pages", label: "Pages", icon: FileText },
-      { to: "/instagram", label: "Instagram", icon: Instagram },
+      { to: "/meta/pages", label: "Pages", icon: FileText },
+      { to: "/meta/instagram", label: "Instagram", icon: Instagram },
       { to: "/campaigns", label: "Campaigns", icon: Megaphone },
       { to: "/leads", label: "Leads", icon: UserRoundSearch },
     ],
@@ -99,12 +99,17 @@ export default function AppShell({ children }) {
 
   const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
+  const handleLogout = () => {
+    closeMobileSidebar();
+    navigate("/login");
+  };
+
   const renderSidebar = (isMobile = false) => (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-6 py-6 dark:border-[#26262a]">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="sidebar-brand-logo-wrap h-11 w-11">
+            <div className="sidebar-brand-logo-wrap flex h-11 w-11 items-center justify-center">
               <img
                 src={logo}
                 alt="Mahimedia"
@@ -113,7 +118,9 @@ export default function AppShell({ children }) {
             </div>
 
             <div>
-              <p className="text-[17px] font-extrabold">Mahimedia Solutions</p>
+              <p className="text-[17px] font-extrabold text-slate-900 dark:text-white">
+                Mahimedia Solutions
+              </p>
               <p className="text-xs text-slate-500">Suite</p>
             </div>
           </div>
@@ -122,7 +129,7 @@ export default function AppShell({ children }) {
             <button
               type="button"
               onClick={closeMobileSidebar}
-              className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.03]"
+              className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-white/[0.03]"
             >
               <X size={18} />
             </button>
@@ -154,11 +161,8 @@ export default function AppShell({ children }) {
 
       <div className="border-t border-slate-200 px-3 py-4 dark:border-[#26262a]">
         <button
-          onClick={() => {
-            closeMobileSidebar();
-            navigate("/login");
-          }}
-          className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.03]"
+          onClick={handleLogout}
+          className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-100 dark:hover:bg-white/[0.03]"
         >
           <LogOut size={18} />
           Log Out
@@ -200,7 +204,7 @@ export default function AppShell({ children }) {
               <Menu size={18} />
             </button>
 
-            <div className="relative min-w-0 flex-1 max-w-[650px]">
+            <div className="relative min-w-0 max-w-[650px] flex-1">
               <Search
                 size={18}
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
@@ -216,7 +220,7 @@ export default function AppShell({ children }) {
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <button
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={() => setShowNotifications((prev) => !prev)}
               className="topbar-action-btn flex h-11 w-11 items-center justify-center rounded-full"
             >
               <Bell size={18} />
@@ -246,7 +250,10 @@ export default function AppShell({ children }) {
               </div>
             </div>
 
-            <button className="blue-gradient-btn hidden items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white xl:flex">
+            <button
+              onClick={() => navigate("/campaigns/add")}
+              className="blue-gradient-btn hidden items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white xl:flex"
+            >
               <Plus size={16} />
               New Campaign
             </button>
@@ -260,7 +267,7 @@ export default function AppShell({ children }) {
 
               <button
                 onClick={() => setShowNotifications(false)}
-                className="text-slate-500 hover:text-red-500"
+                className="text-slate-500 transition hover:text-red-500"
               >
                 <X size={18} />
               </button>
@@ -292,6 +299,29 @@ export default function AppShell({ children }) {
 
         <main className="custom-scrollbar flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           {children}
+
+          <footer className="mt-8 border-t border-slate-200 pt-5 dark:border-[#26262a]">
+            <div className="flex flex-col gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                © {new Date().getFullYear()} Mahimedia Solutions. All rights reserved.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  onClick={() => navigate("/privacy-policy")}
+                  className="transition hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  Privacy Policy
+                </button>
+                <button
+                  onClick={() => navigate("/terms-of-use")}
+                  className="transition hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  Terms of Use
+                </button>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
     </div>

@@ -11,6 +11,7 @@ import {
   Save,
   X,
 } from "lucide-react";
+import { createBrandApi } from "../../lib/api";
 
 export default function AddBrand() {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ export default function AddBrand() {
     industry: "Technology & SaaS",
     website: "",
     metaBusiness: "",
-    status: "Active",
+    status: "active",
     description: "",
     pages: "",
     campaigns: "",
@@ -29,6 +30,9 @@ export default function AddBrand() {
     connectFacebook: true,
     connectInstagram: true,
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -38,9 +42,19 @@ export default function AddBrand() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/brands");
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await createBrandApi(form);
+      navigate(`/brands/${res.brand.id}`);
+    } catch (err) {
+      setError(err.message || "Failed to create brand");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,13 +87,20 @@ export default function AddBrand() {
             </button>
             <button
               onClick={handleSubmit}
-              className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               <Save size={16} />
-              Save Brand
+              {loading ? "Saving..." : "Save Brand"}
             </button>
           </div>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <section className="app-panel rounded-[2rem] p-8">
@@ -153,9 +174,9 @@ export default function AddBrand() {
                   onChange={handleChange}
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 >
-                  <option>Active</option>
-                  <option>Paused</option>
-                  <option>Draft</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="draft">Draft</option>
                 </select>
               </div>
 
@@ -337,10 +358,11 @@ export default function AddBrand() {
 
             <button
               type="submit"
-              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={loading}
+              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               <Save size={16} />
-              Create Brand
+              {loading ? "Creating..." : "Create Brand"}
             </button>
           </div>
         </form>

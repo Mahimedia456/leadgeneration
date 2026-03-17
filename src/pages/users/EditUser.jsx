@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -10,40 +10,148 @@ import {
   Save,
   Pencil,
 } from "lucide-react";
+import {
+  getBrandsApi,
+  getMyWorkspacesApi,
+  getStoredUser,
+  getUserByIdApi,
+  updateUserApi,
+} from "../../lib/api";
 
 export default function EditUser() {
   const navigate = useNavigate();
   const { userId } = useParams();
+  const currentUser = getStoredUser();
+
+  const [brands, setBrands] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
-    fullName: "Liam Wilson",
-    email: "liam.w@nexus-labs.com",
-    userId: userId || "USR-1001",
-    role: "Global Admin",
-    status: "Active",
-    brand: "Nexus Labs",
-    department: "Operations",
-    phone: "+1 555 100 001",
-    jobTitle: "Global Admin",
-    bio: "Enterprise platform administrator managing brand workspaces and user controls.",
+    fullName: "",
+    email: "",
+    globalRole: "workspace_user",
+    status: "active",
+    assignedBrandIds: [],
+    assignedWorkspaceIds: [],
+    department: "",
+    phone: "",
+    jobTitle: "",
+    bio: "",
     enableDashboard: true,
     enableLeads: true,
-    enableCampaigns: true,
+    enableCampaigns: false,
     sendInvite: false,
   });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUser() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [userRes, brandsRes, workspacesRes] = await Promise.all([
+          getUserByIdApi(userId),
+          getBrandsApi().catch(() => ({ brands: [] })),
+          getMyWorkspacesApi().catch(() => ({ workspaces: [] })),
+        ]);
+
+        const user = userRes.user;
+
+        if (!cancelled) {
+          setBrands(brandsRes.brands || []);
+          setWorkspaces(workspacesRes.workspaces || []);
+
+          setForm({
+            fullName: user.fullName || "",
+            email: user.email || "",
+            globalRole: user.globalRole || "workspace_user",
+            status: user.status || "active",
+            assignedBrandIds: (user.assignedBrands || []).map((b) => b.id),
+            assignedWorkspaceIds: (user.assignedWorkspaces || []).map((w) => w.id),
+            department: user.department || "",
+            phone: user.phone || "",
+            jobTitle: user.jobTitle || "",
+            bio: user.bio || "",
+            enableDashboard: user.enableDashboard ?? true,
+            enableLeads: user.enableLeads ?? true,
+            enableCampaigns: user.enableCampaigns ?? false,
+            sendInvite: false,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load user");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked, options } = e.target;
+
+    if (type === "checkbox") {
+      setForm((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    if (e.target.multiple) {
+      const values = Array.from(options)
+        .filter((opt) => opt.selected)
+        .map((opt) => opt.value);
+
+      setForm((prev) => ({
+        ...prev,
+        [name]: values,
+      }));
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate(`/users/${form.userId}`);
+    setError("");
+    setSaving(true);
+
+    try {
+      await updateUserApi(userId, form);
+      navigate(`/users/${userId}`);
+    } catch (err) {
+      setError(err.message || "Failed to update user");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel p-8">Loading user...</div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -68,12 +176,19 @@ export default function EditUser() {
 
           <button
             onClick={handleSubmit}
-            className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+            disabled={saving}
+            className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
             <Save size={16} />
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <section className="app-panel rounded-[2rem] p-8">
@@ -99,18 +214,6 @@ export default function EditUser() {
                 <input
                   name="fullName"
                   value={form.fullName}
-                  onChange={handleChange}
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  User ID
-                </label>
-                <input
-                  name="userId"
-                  value={form.userId}
                   onChange={handleChange}
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
@@ -195,7 +298,7 @@ export default function EditUser() {
                   Role & Assignment
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Access level and workspace assignment.
+                  Access level and scope assignment.
                 </p>
               </div>
             </div>
@@ -203,36 +306,19 @@ export default function EditUser() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Role
+                  Global Role
                 </label>
                 <select
-                  name="role"
-                  value={form.role}
+                  name="globalRole"
+                  value={form.globalRole}
                   onChange={handleChange}
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 >
-                  <option>Global Admin</option>
-                  <option>Brand Editor</option>
-                  <option>Viewer</option>
-                  <option>Compliance Officer</option>
-                  <option>Developer</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Assigned Brand
-                </label>
-                <select
-                  name="brand"
-                  value={form.brand}
-                  onChange={handleChange}
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                >
-                  <option>Nexus Labs</option>
-                  <option>Vortex Global</option>
-                  <option>Horizon Corp</option>
-                  <option>Aether Dynamics</option>
+                  {currentUser?.globalRole === "admin" && (
+                    <option value="admin">admin</option>
+                  )}
+                  <option value="brand_user">brand_user</option>
+                  <option value="workspace_user">workspace_user</option>
                 </select>
               </div>
 
@@ -246,9 +332,47 @@ export default function EditUser() {
                   onChange={handleChange}
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 >
-                  <option>Active</option>
-                  <option>Pending</option>
-                  <option>Inactive</option>
+                  <option value="active">active</option>
+                  <option value="pending">pending</option>
+                  <option value="inactive">inactive</option>
+                </select>
+              </div>
+
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Assigned Brands
+                </label>
+                <select
+                  multiple
+                  name="assignedBrandIds"
+                  value={form.assignedBrandIds}
+                  onChange={handleChange}
+                  className="auth-minimal-input min-h-[140px] w-full rounded-xl px-4 py-3 text-sm"
+                >
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Assigned Workspaces
+                </label>
+                <select
+                  multiple
+                  name="assignedWorkspaceIds"
+                  value={form.assignedWorkspaceIds}
+                  onChange={handleChange}
+                  className="auth-minimal-input min-h-[140px] w-full rounded-xl px-4 py-3 text-sm"
+                >
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -307,10 +431,11 @@ export default function EditUser() {
 
             <button
               type="submit"
-              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={saving}
+              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               <Pencil size={16} />
-              Update User
+              {saving ? "Updating..." : "Update User"}
             </button>
           </div>
         </form>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
@@ -6,25 +6,37 @@ import {
   UserPlus,
   Mail,
   Shield,
-  Building2,
   Save,
   X,
   Briefcase,
 } from "lucide-react";
+import {
+  createUserApi,
+  getBrandsApi,
+  getStoredUser,
+  getMyWorkspacesApi,
+} from "../../lib/api";
 
 export default function AddUser() {
   const navigate = useNavigate();
+  const currentUser = getStoredUser();
+
+  const [brands, setBrands] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     fullName: "",
     email: "",
-    userId: "",
-    role: "Brand Editor",
-    status: "Active",
-    brand: "Nexus Labs",
+    globalRole: "workspace_user",
+    status: "active",
+    assignedBrandIds: [],
+    assignedWorkspaceIds: [],
+    jobTitle: "",
     department: "",
     phone: "",
-    jobTitle: "",
     bio: "",
     sendInvite: true,
     enableDashboard: true,
@@ -32,17 +44,83 @@ export default function AddUser() {
     enableCampaigns: false,
   });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOptions() {
+      setLoadingOptions(true);
+      setError("");
+
+      try {
+        const [brandsRes, workspacesRes] = await Promise.all([
+          getBrandsApi().catch(() => ({ brands: [] })),
+          getMyWorkspacesApi().catch(() => ({ workspaces: [] })),
+        ]);
+
+        if (!cancelled) {
+          setBrands(brandsRes.brands || []);
+          setWorkspaces(workspacesRes.workspaces || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load form options");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingOptions(false);
+        }
+      }
+    }
+
+    loadOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked, options } = e.target;
+
+    if (type === "checkbox") {
+      setForm((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    if (e.target.multiple) {
+      const values = Array.from(options)
+        .filter((opt) => opt.selected)
+        .map((opt) => opt.value);
+
+      setForm((prev) => ({
+        ...prev,
+        [name]: values,
+      }));
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/users");
+    setError("");
+    setSaving(true);
+
+    try {
+      const res = await createUserApi(form);
+      navigate(`/users/${res.user.id}`);
+    } catch (err) {
+      setError(err.message || "Failed to create user");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -62,7 +140,7 @@ export default function AddUser() {
               Add User
             </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Create a new enterprise user and assign role, access, and brand ownership.
+              Create a new enterprise user and assign role, brand, and workspace access.
             </p>
           </div>
 
@@ -75,13 +153,20 @@ export default function AddUser() {
             </button>
             <button
               onClick={handleSubmit}
-              className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={saving}
+              className="blue-gradient-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               <Save size={16} />
-              Save User
+              {saving ? "Saving..." : "Save User"}
             </button>
           </div>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <section className="app-panel rounded-[2rem] p-8">
@@ -109,19 +194,6 @@ export default function AddUser() {
                   value={form.fullName}
                   onChange={handleChange}
                   placeholder="Alex Morgan"
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  User ID
-                </label>
-                <input
-                  name="userId"
-                  value={form.userId}
-                  onChange={handleChange}
-                  placeholder="USR-1006"
                   className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
                 />
               </div>
@@ -210,63 +282,88 @@ export default function AddUser() {
                   Role & Assignment
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Role, brand, and access state.
+                  Role, brands, and workspace scope.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Role
-                </label>
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                >
-                  <option>Global Admin</option>
-                  <option>Brand Editor</option>
-                  <option>Viewer</option>
-                  <option>Compliance Officer</option>
-                  <option>Developer</option>
-                </select>
-              </div>
+            {loadingOptions ? (
+              <div className="text-sm text-slate-500">Loading options...</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Global Role
+                  </label>
+                  <select
+                    name="globalRole"
+                    value={form.globalRole}
+                    onChange={handleChange}
+                    className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
+                  >
+                    {currentUser?.globalRole === "admin" && (
+                      <option value="admin">admin</option>
+                    )}
+                    <option value="brand_user">brand_user</option>
+                    <option value="workspace_user">workspace_user</option>
+                  </select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Assigned Brand
-                </label>
-                <select
-                  name="brand"
-                  value={form.brand}
-                  onChange={handleChange}
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                >
-                  <option>Nexus Labs</option>
-                  <option>Vortex Global</option>
-                  <option>Horizon Corp</option>
-                  <option>Aether Dynamics</option>
-                </select>
-              </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    value={form.status}
+                    onChange={handleChange}
+                    className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
+                  >
+                    <option value="active">active</option>
+                    <option value="pending">pending</option>
+                    <option value="inactive">inactive</option>
+                  </select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Status
-                </label>
-                <select
-                  name="status"
-                  value={form.status}
-                  onChange={handleChange}
-                  className="auth-minimal-input w-full rounded-xl px-4 py-3 text-sm"
-                >
-                  <option>Active</option>
-                  <option>Pending</option>
-                  <option>Inactive</option>
-                </select>
+                <div className="space-y-2 md:col-span-3">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Assigned Brands
+                  </label>
+                  <select
+                    multiple
+                    name="assignedBrandIds"
+                    value={form.assignedBrandIds}
+                    onChange={handleChange}
+                    className="auth-minimal-input min-h-[140px] w-full rounded-xl px-4 py-3 text-sm"
+                  >
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2 md:col-span-3">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Assigned Workspaces
+                  </label>
+                  <select
+                    multiple
+                    name="assignedWorkspaceIds"
+                    value={form.assignedWorkspaceIds}
+                    onChange={handleChange}
+                    className="auth-minimal-input min-h-[140px] w-full rounded-xl px-4 py-3 text-sm"
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
           </section>
 
           <section className="app-panel rounded-[2rem] p-8">
@@ -355,10 +452,11 @@ export default function AddUser() {
 
             <button
               type="submit"
-              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+              disabled={saving}
+              className="blue-gradient-btn inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               <Save size={16} />
-              Create User
+              {saving ? "Creating..." : "Create User"}
             </button>
           </div>
         </form>
