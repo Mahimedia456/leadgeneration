@@ -16,9 +16,7 @@ export default function AuthMetaCallback() {
         const errorDescription = params.get("error_description");
 
         if (error) {
-          throw new Error(
-            errorDescription || errorReason || "Meta authorization failed"
-          );
+          throw new Error(errorDescription || errorReason || "Meta authorization failed");
         }
 
         if (!code) {

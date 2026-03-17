@@ -12,9 +12,7 @@ function required(name) {
 
 function optional(name, fallback = "") {
   const value = process.env[name];
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
+  if (value === undefined || value === null || value === "") return fallback;
   return String(value).trim();
 }
 
@@ -42,9 +40,6 @@ export const env = {
   metaAppId: optional("META_APP_ID", ""),
   metaAppSecret: optional("META_APP_SECRET", ""),
   metaApiVersion: optional("META_API_VERSION", "v25.0"),
-  metaRedirectUri: optional(
-    "META_REDIRECT_URI",
-    "https://leadgeneration-9fbm.vercel.app/api/meta/facebook/callback"
-  ),
+  metaRedirectUri: optional("META_REDIRECT_URI", ""),
   metaVerifyToken: optional("META_VERIFY_TOKEN", ""),
 };

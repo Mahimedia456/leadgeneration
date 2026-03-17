@@ -14,9 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  AlertTriangle,
   Link2,
   CheckCircle2,
+  AlertTriangle,
   Clock3,
   Layers3,
   LoaderCircle,
@@ -194,7 +194,7 @@ export default function FacebookPages() {
             </button>
 
             <button
-              onClick={() => navigate("/meta-connections")}
+              onClick={() => navigate("/meta/connections")}
               className="blue-gradient-btn flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
             >
               <Plus size={16} />
@@ -223,11 +223,7 @@ export default function FacebookPages() {
                     <Icon size={20} />
                   </div>
 
-                  <span
-                    className={`rounded-lg px-3 py-1 text-xs font-bold ${statToneClasses(
-                      item.tone
-                    )}`}
-                  >
+                  <span className={`rounded-lg px-3 py-1 text-xs font-bold ${statToneClasses(item.tone)}`}>
                     {item.change}
                   </span>
                 </div>
@@ -400,7 +396,7 @@ export default function FacebookPages() {
                             <button
                               onClick={() => {
                                 setOpenMenuId(null);
-                                navigate("/meta-connections");
+                                navigate("/meta/connections");
                               }}
                               className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                             >
@@ -435,7 +431,7 @@ export default function FacebookPages() {
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => navigate("/meta-connections")}
+                  onClick={() => navigate("/meta/connections")}
                   className="blue-gradient-btn rounded-xl px-5 py-3 text-sm font-semibold text-white"
                 >
                   Launch Bulk Wizard
@@ -454,10 +450,7 @@ export default function FacebookPages() {
               {quickStatus.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div
-                    key={item.title}
-                    className="rounded-xl bg-slate-50 p-4 dark:bg-white/[0.03]"
-                  >
+                  <div key={item.title} className="rounded-xl bg-slate-50 p-4 dark:bg-white/[0.03]">
                     <div className="flex items-start justify-between gap-3">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-xl ${statToneClasses(

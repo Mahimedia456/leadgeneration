@@ -5,20 +5,22 @@ export function buildMetaOAuthUrl() {
   if (!appId) throw new Error("VITE_META_APP_ID is missing");
   if (!redirectUri) throw new Error("VITE_META_REDIRECT_URI is missing");
 
-  const scope = [
+  const scopes = [
     "pages_show_list",
     "pages_read_engagement",
     "pages_manage_metadata",
+    "pages_messaging",
     "business_management",
+    "leads_retrieval",
     "instagram_basic",
     "instagram_manage_messages",
-  ].join(",");
+  ];
 
   const url = new URL("https://www.facebook.com/dialog/oauth");
   url.searchParams.set("client_id", appId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", scope);
+  url.searchParams.set("scope", scopes.join(","));
 
   return url.toString();
 }

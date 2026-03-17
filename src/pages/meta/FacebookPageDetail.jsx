@@ -44,12 +44,8 @@ function statusClasses(status) {
 }
 
 function healthTone(health) {
-  if (health >= 90) {
-    return { bar: "bg-emerald-500", text: "text-emerald-500" };
-  }
-  if (health >= 70) {
-    return { bar: "bg-amber-500", text: "text-amber-500" };
-  }
+  if (health >= 90) return { bar: "bg-emerald-500", text: "text-emerald-500" };
+  if (health >= 70) return { bar: "bg-amber-500", text: "text-amber-500" };
   return { bar: "bg-rose-500", text: "text-rose-500" };
 }
 
@@ -263,11 +259,7 @@ export default function FacebookPageDetail() {
                     <Icon size={20} />
                   </div>
 
-                  <span
-                    className={`rounded-lg px-3 py-1 text-xs font-bold ${statToneClasses(
-                      item.tone
-                    )}`}
-                  >
+                  <span className={`rounded-lg px-3 py-1 text-xs font-bold ${statToneClasses(item.tone)}`}>
                     {item.change}
                   </span>
                 </div>
@@ -406,10 +398,7 @@ export default function FacebookPageDetail() {
 
                   <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                     {recentLeadSources.map((item) => (
-                      <tr
-                        key={item.source}
-                        className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
-                      >
+                      <tr key={item.source} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                         <td className="px-8 py-5 text-sm font-bold text-slate-900 dark:text-white">
                           {item.source}
                         </td>
@@ -442,10 +431,7 @@ export default function FacebookPageDetail() {
                 </div>
 
                 <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                  <div
-                    className={`h-full rounded-full ${health.bar}`}
-                    style={{ width: `${page.pageHealth}%` }}
-                  />
+                  <div className={`h-full rounded-full ${health.bar}`} style={{ width: `${page.pageHealth}%` }} />
                 </div>
               </div>
 

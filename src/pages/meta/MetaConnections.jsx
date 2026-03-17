@@ -385,10 +385,7 @@ export default function MetaConnections() {
                   <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                     {loading ? (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-8 py-12 text-center text-sm text-slate-500"
-                        >
+                        <td colSpan={7} className="px-8 py-12 text-center text-sm text-slate-500">
                           <div className="inline-flex items-center gap-2">
                             <LoaderCircle size={18} className="animate-spin" />
                             Loading Meta connections...
@@ -397,10 +394,7 @@ export default function MetaConnections() {
                       </tr>
                     ) : filteredConnections.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-8 py-12 text-center text-sm text-slate-500"
-                        >
+                        <td colSpan={7} className="px-8 py-12 text-center text-sm text-slate-500">
                           No Meta connections found.
                         </td>
                       </tr>
