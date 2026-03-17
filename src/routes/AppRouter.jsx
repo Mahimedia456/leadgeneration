@@ -39,6 +39,8 @@ import AddCampaign from "../pages/campaign/AddCampaign";
 import Leads from "../pages/leads/Leads";
 import LeadsDetail from "../pages/leads/LeadsDetail";
 import LeadExport from "../pages/leads/LeadExport";
+import AuthMetaCallback from "../pages/meta/AuthMetaCallback";
+
 
 import Distribution from "../pages/distribution/Distribution";
 import AssignmentRule from "../pages/distribution/AssignmentRule";
@@ -93,7 +95,7 @@ export default function AppRouter() {
       <Route path="/access-denied" element={<AccessDenied />} />
 
       <Route path="/dashboard" element={<Dashboard />} />
-
+<Route path="/auth/meta/callback" element={<AuthMetaCallback />} />
       <Route path="/brands" element={<Brands />} />
       <Route path="/brands/add" element={<AddBrand />} />
       <Route path="/brands/:brandId" element={<BrandDetail />} />
