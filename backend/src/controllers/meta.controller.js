@@ -164,7 +164,7 @@ export async function getMetaOAuthUrl(_req, res, next) {
 export async function exchangeMetaCode(req, res, next) {
   try {
     const userId = getUserId(req);
-    const { code, workspaceId } = req.body || {};
+    const { code, workspaceId } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -175,18 +175,27 @@ export async function exchangeMetaCode(req, res, next) {
     }
 
     if (!code) {
-      return res.status(400).json({ message: "Meta authorization code is required" });
+      return res.status(400).json({
+        message: "Meta authorization code is required",
+      });
     }
 
     const longLived = await exchangeForLongLivedToken(code);
+
+    /* FETCH META USER FIRST */
+    const me = await graph("me", {
+      fields: "id,name",
+      access_token: longLived.access_token,
+    });
 
     const { data: connection, error: insertError } = await supabase
       .from("meta_connections")
       .insert({
         workspace_id: workspaceId,
         connected_by: userId,
-        business_name: null,
-        meta_user_name: "Meta User",
+        meta_user_id: String(me.id),      // FIX
+        meta_user_name: me.name || "Meta User",
+        business_name: me.name || null,
         status: "active",
         user_access_token: longLived.access_token,
         token_expires_in: longLived.expires_in || null,
@@ -209,6 +218,7 @@ export async function exchangeMetaCode(req, res, next) {
       metaUser: synced.me,
       pages: synced.pages,
     });
+
   } catch (error) {
     next(error);
   }
