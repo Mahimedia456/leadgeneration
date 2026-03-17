@@ -31,7 +31,7 @@ const navGroups = [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/brands", label: "Brands", icon: Building2 },
       { to: "/users", label: "Users", icon: Users },
-      { to: "/meta-connections", label: "Meta Connections", icon: Link2 },
+      { to: "/meta/connections", label: "Meta Connections", icon: Link2 },
     ],
   },
   {
