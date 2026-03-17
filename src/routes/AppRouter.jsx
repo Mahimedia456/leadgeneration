@@ -25,7 +25,7 @@ import UserDetail from "../pages/users/UserDetail";
 import RolesPermissions from "../pages/users/RolesPermissions";
 
 import MetaConnections from "../pages/meta/MetaConnections";
-import MetaConnectionFinish from "../pages/meta/MetaConnectionFinish";
+import AuthMetaCallback from "../pages/meta/AuthMetaCallback";
 import FacebookPages from "../pages/meta/FacebookPages";
 import InstagramAccounts from "../pages/meta/InstagramAccounts";
 import FacebookPageDetail from "../pages/meta/FacebookPageDetail";
@@ -39,8 +39,6 @@ import AddCampaign from "../pages/campaign/AddCampaign";
 import Leads from "../pages/leads/Leads";
 import LeadsDetail from "../pages/leads/LeadsDetail";
 import LeadExport from "../pages/leads/LeadExport";
-import AuthMetaCallback from "../pages/meta/AuthMetaCallback";
-
 
 import Distribution from "../pages/distribution/Distribution";
 import AssignmentRule from "../pages/distribution/AssignmentRule";
@@ -95,7 +93,14 @@ export default function AppRouter() {
       <Route path="/access-denied" element={<AccessDenied />} />
 
       <Route path="/dashboard" element={<Dashboard />} />
-<Route path="/auth/meta/callback" element={<AuthMetaCallback />} />
+
+      <Route path="/auth/meta/callback" element={<AuthMetaCallback />} />
+      <Route path="/meta/connections" element={<MetaConnections />} />
+      <Route path="/meta/pages" element={<FacebookPages />} />
+      <Route path="/meta/pages/:pageId" element={<FacebookPageDetail />} />
+      <Route path="/meta/instagram" element={<InstagramAccounts />} />
+      <Route path="/meta/instagram/:accountId" element={<InstagramAccountDetail />} />
+
       <Route path="/brands" element={<Brands />} />
       <Route path="/brands/add" element={<AddBrand />} />
       <Route path="/brands/:brandId" element={<BrandDetail />} />
@@ -104,13 +109,6 @@ export default function AppRouter() {
 
       <Route path="/notifications" element={<Notifications />} />
       <Route path="/activity-logs" element={<ActivityLogs />} />
-
-      <Route path="/meta-connections" element={<MetaConnections />} />
-      <Route path="/meta-connections/finish" element={<MetaConnectionFinish />} />
-      <Route path="/meta/pages" element={<FacebookPages />} />
-      <Route path="/meta/pages/:pageId" element={<FacebookPageDetail />} />
-      <Route path="/meta/instagram" element={<InstagramAccounts />} />
-      <Route path="/meta/instagram/:accountId" element={<InstagramAccountDetail />} />
 
       <Route path="/campaigns" element={<Campaigns />} />
       <Route path="/campaigns/add" element={<AddCampaign />} />
@@ -159,6 +157,8 @@ export default function AppRouter() {
         path="/placeholder"
         element={<PlaceholderPage title="Placeholder" />}
       />
+
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
