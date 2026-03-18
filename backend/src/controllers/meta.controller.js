@@ -197,7 +197,7 @@ export async function exchangeMetaCode(req, res, next) {
         meta_user_name: me.name || "Meta User",
         business_name: me.name || null,
         status: "active",
-        user_access_token: longLived.access_token,
+        access_token: longLived.access_token,
         token_expires_in: longLived.expires_in || null,
         last_synced_at: new Date().toISOString(),
       })
