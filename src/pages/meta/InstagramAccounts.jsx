@@ -198,7 +198,7 @@ export default function InstagramAccounts() {
             </button>
 
             <button
-              onClick={() => navigate("/meta-connections")}
+              onClick={() => navigate("/meta/connections")}
               className="blue-gradient-btn flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white"
             >
               <Plus size={16} />
@@ -422,7 +422,7 @@ export default function InstagramAccounts() {
                             <button
                               onClick={() => {
                                 setOpenMenuId(null);
-                                navigate("/meta-connections");
+                                navigate("/meta/connections");
                               }}
                               className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                             >
@@ -457,7 +457,7 @@ export default function InstagramAccounts() {
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => navigate("/meta-connections")}
+                  onClick={() => navigate("/meta/connections")}
                   className="blue-gradient-btn rounded-xl px-5 py-3 text-sm font-semibold text-white"
                 >
                   Launch Bulk Linker

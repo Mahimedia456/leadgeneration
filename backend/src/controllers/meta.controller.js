@@ -182,29 +182,64 @@ export async function exchangeMetaCode(req, res, next) {
 
     const longLived = await exchangeForLongLivedToken(code);
 
-    /* FETCH META USER FIRST */
     const me = await graph("me", {
       fields: "id,name",
       access_token: longLived.access_token,
     });
 
-    const { data: connection, error: insertError } = await supabase
+    // Try to find existing connection for same workspace + same meta user
+    const { data: existingConnection, error: existingError } = await supabase
       .from("meta_connections")
-      .insert({
-        workspace_id: workspaceId,
-        connected_by: userId,
-        meta_user_id: String(me.id),      // FIX
-        meta_user_name: me.name || "Meta User",
-        business_name: me.name || null,
-        status: "active",
-        access_token: longLived.access_token,
-        token_expires_in: longLived.expires_in || null,
-        last_synced_at: new Date().toISOString(),
-      })
       .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("meta_user_id", String(me.id))
       .single();
 
-    if (insertError) throw insertError;
+    // Ignore "no rows found" error, throw others
+    if (existingError && existingError.code !== "PGRST116") {
+      throw existingError;
+    }
+
+    let connection = null;
+
+    if (existingConnection) {
+      const { data: updatedConnection, error: updateError } = await supabase
+        .from("meta_connections")
+        .update({
+          connected_by: userId,
+          meta_user_name: me.name || "Meta User",
+          business_name: me.name || null,
+          status: "active",
+          access_token: longLived.access_token,
+          token_expires_in: longLived.expires_in || null,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", existingConnection.id)
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+      connection = updatedConnection;
+    } else {
+      const { data: insertedConnection, error: insertError } = await supabase
+        .from("meta_connections")
+        .insert({
+          workspace_id: workspaceId,
+          connected_by: userId,
+          meta_user_id: String(me.id),
+          meta_user_name: me.name || "Meta User",
+          business_name: me.name || null,
+          status: "active",
+          access_token: longLived.access_token,
+          token_expires_in: longLived.expires_in || null,
+          last_synced_at: new Date().toISOString(),
+        })
+        .select("*")
+        .single();
+
+      if (insertError) throw insertError;
+      connection = insertedConnection;
+    }
 
     const synced = await syncConnectionAssets({
       connectionId: connection.id,
@@ -218,7 +253,6 @@ export async function exchangeMetaCode(req, res, next) {
       metaUser: synced.me,
       pages: synced.pages,
     });
-
   } catch (error) {
     next(error);
   }
@@ -298,7 +332,7 @@ export async function syncMetaConnection(req, res, next) {
 
     await syncConnectionAssets({
       connectionId: connection.id,
-      userToken: connection.user_access_token,
+      userToken: connection.access_token,
     });
 
     return res.status(200).json({
