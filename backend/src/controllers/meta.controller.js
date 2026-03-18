@@ -67,7 +67,7 @@ async function exchangeForLongLivedToken(code) {
   return longLived;
 }
 
-async function syncConnectionAssets({ connectionId, userToken }) {
+async function syncConnectionAssets({ connectionId, workspaceId, userToken }) {
   const me = await graph("me", {
     fields: "id,name",
     access_token: userToken,
@@ -82,6 +82,7 @@ async function syncConnectionAssets({ connectionId, userToken }) {
 
   for (const page of pageItems) {
     const pagePayload = {
+      workspace_id: workspaceId,
       connection_id: connectionId,
       page_id: String(page.id),
       page_name: page.name || "Facebook Page",
@@ -106,25 +107,25 @@ async function syncConnectionAssets({ connectionId, userToken }) {
           access_token: page.access_token,
         });
 
+        const igPayload = {
+          workspace_id: workspaceId,
+          connection_id: connectionId,
+          page_id: String(page.id),
+          ig_user_id: String(ig.id),
+          username: ig.username || "",
+          followers_count: Number(ig.followers_count || 0),
+          media_count: Number(ig.media_count || 0),
+          status: "connected",
+          last_synced_at: new Date().toISOString(),
+        };
+
         const { error: igUpsertError } = await supabase
           .from("meta_instagram_accounts")
-          .upsert(
-            {
-              connection_id: connectionId,
-              page_id: String(page.id),
-              ig_user_id: String(ig.id),
-              username: ig.username || "",
-              followers_count: Number(ig.followers_count || 0),
-              media_count: Number(ig.media_count || 0),
-              status: "connected",
-              last_synced_at: new Date().toISOString(),
-            },
-            { onConflict: "ig_user_id" }
-          );
+          .upsert(igPayload, { onConflict: "ig_user_id" });
 
         if (igUpsertError) throw igUpsertError;
       } catch (_err) {
-        // ignore IG detail fetch failures for now
+        // IG fetch failure ignore for now
       }
     }
   }
@@ -164,7 +165,7 @@ export async function getMetaOAuthUrl(_req, res, next) {
 export async function exchangeMetaCode(req, res, next) {
   try {
     const userId = getUserId(req);
-    const { code, workspaceId } = req.body;
+    const { code, workspaceId } = req.body || {};
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -175,9 +176,7 @@ export async function exchangeMetaCode(req, res, next) {
     }
 
     if (!code) {
-      return res.status(400).json({
-        message: "Meta authorization code is required",
-      });
+      return res.status(400).json({ message: "Meta authorization code is required" });
     }
 
     const longLived = await exchangeForLongLivedToken(code);
@@ -187,7 +186,6 @@ export async function exchangeMetaCode(req, res, next) {
       access_token: longLived.access_token,
     });
 
-    // Try to find existing connection for same workspace + same meta user
     const { data: existingConnection, error: existingError } = await supabase
       .from("meta_connections")
       .select("*")
@@ -195,7 +193,6 @@ export async function exchangeMetaCode(req, res, next) {
       .eq("meta_user_id", String(me.id))
       .single();
 
-    // Ignore "no rows found" error, throw others
     if (existingError && existingError.code !== "PGRST116") {
       throw existingError;
     }
@@ -243,6 +240,7 @@ export async function exchangeMetaCode(req, res, next) {
 
     const synced = await syncConnectionAssets({
       connectionId: connection.id,
+      workspaceId,
       userToken: longLived.access_token,
     });
 
@@ -287,12 +285,8 @@ export async function getMetaConnections(req, res, next) {
     if (igError) throw igError;
 
     const items = (connections || []).map((connection) => {
-      const relatedPages = (pages || []).filter(
-        (p) => p.connection_id === connection.id
-      );
-      const relatedIg = (igAccounts || []).filter(
-        (i) => i.connection_id === connection.id
-      );
+      const relatedPages = (pages || []).filter((p) => p.connection_id === connection.id);
+      const relatedIg = (igAccounts || []).filter((i) => i.connection_id === connection.id);
 
       return {
         ...connection,
@@ -332,6 +326,7 @@ export async function syncMetaConnection(req, res, next) {
 
     await syncConnectionAssets({
       connectionId: connection.id,
+      workspaceId: connection.workspace_id,
       userToken: connection.access_token,
     });
 
@@ -530,9 +525,7 @@ export async function getMetaInstagramAccounts(req, res, next) {
 
     if (pagesError) throw pagesError;
 
-    const pageMap = Object.fromEntries(
-      (pages || []).map((p) => [p.page_id, p])
-    );
+    const pageMap = Object.fromEntries((pages || []).map((p) => [p.page_id, p]));
 
     const items = (accounts || []).map((item) => ({
       ...item,
