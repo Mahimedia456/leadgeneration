@@ -6,12 +6,15 @@ const supabase = createClient(env.supabaseUrl, env.supabaseServiceRoleKey);
 const META_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
+  "pages_read_user_content",
   "pages_manage_metadata",
   "pages_messaging",
   "business_management",
   "leads_retrieval",
   "instagram_basic",
   "instagram_manage_messages",
+  "instagram_manage_insights",
+  "instagram_manage_comments",
 ];
 
 function getUserId(req) {
@@ -77,6 +80,7 @@ async function syncConnectionAssets({ connectionId, workspaceId, userToken }) {
     fields: "id,name,category,access_token,instagram_business_account",
     access_token: userToken,
   });
+  console.log(JSON.stringify(accounts.data, null, 2));
 
   const pageItems = accounts.data || [];
 
