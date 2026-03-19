@@ -26,17 +26,24 @@ export default function AuthMetaCallback() {
         }
 
         const selectedWorkspace = getSelectedWorkspace();
-        const workspaceId = selectedWorkspace?.id || selectedWorkspace?.workspace_id || "";
+        const workspaceId =
+          selectedWorkspace?.id || selectedWorkspace?.workspace_id || "";
 
         if (!workspaceId) {
-          throw new Error("No workspace selected. Please select a workspace first.");
+          throw new Error(
+            "No workspace selected. Please select a workspace first."
+          );
         }
+
+        setMessage("Exchanging Meta authorization code...");
 
         await apiFetch("/api/meta/exchange-code", {
           method: "POST",
           auth: true,
           body: { code, workspaceId },
         });
+
+        setMessage("Meta connected successfully. Redirecting...");
 
         navigate("/meta/connections?success=1", { replace: true });
       } catch (err) {

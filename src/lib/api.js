@@ -385,3 +385,127 @@ export async function updateRolePermissionsApi(role, permissions) {
     body: { permissions },
   });
 }
+
+/* ---------------- Campaigns ---------------- */
+
+export async function getCampaignsApi(params = {}) {
+  const search = new URLSearchParams();
+
+  if (params.brandId) search.set("brandId", params.brandId);
+  if (params.q) search.set("q", params.q);
+  if (params.status) search.set("status", params.status);
+  if (params.objective) search.set("objective", params.objective);
+
+  const query = search.toString();
+
+  return apiFetch(`/api/campaigns${query ? `?${query}` : ""}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function getCampaignDetailApi(campaignId) {
+  return apiFetch(`/api/campaigns/${campaignId}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function createCampaignApi(payload) {
+  return apiFetch("/api/campaigns", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
+}
+
+export async function updateCampaignApi(campaignId, payload) {
+  return apiFetch(`/api/campaigns/${campaignId}`, {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}
+
+export async function deleteCampaignApi(campaignId) {
+  return apiFetch(`/api/campaigns/${campaignId}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+/* ---------------- Ad Sets ---------------- */
+
+export async function getAdSetsApi(params = {}) {
+  const search = new URLSearchParams();
+
+  if (params.campaignId) search.set("campaignId", params.campaignId);
+  if (params.q) search.set("q", params.q);
+  if (params.status) search.set("status", params.status);
+
+  const query = search.toString();
+
+  return apiFetch(`/api/campaigns/ad-sets${query ? `?${query}` : ""}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function createAdSetApi(payload) {
+  return apiFetch("/api/campaigns/ad-sets", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
+}
+/* ---------------- Meta Ads Manager ---------------- */
+
+export async function getMetaAdAccountsApi(connectionId = "") {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(`/api/meta/ad-accounts${query}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function getMetaAdAccountCampaignsApi(adAccountId, connectionId = "") {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/campaigns${query}`,
+    {
+      method: "GET",
+      auth: true,
+    }
+  );
+}
+
+export async function getMetaAdAccountAdSetsApi(adAccountId, connectionId = "") {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/adsets${query}`,
+    {
+      method: "GET",
+      auth: true,
+    }
+  );
+}
+
+export async function syncMetaAdAccountCampaignsApi(adAccountId, payload) {
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/sync-campaigns`,
+    {
+      method: "POST",
+      auth: true,
+      body: payload,
+    }
+  );
+}

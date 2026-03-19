@@ -22,12 +22,16 @@ import {
   LoaderCircle,
   Facebook,
   Instagram,
+  Megaphone,
 } from "lucide-react";
+import { getBrandsApi } from "../../lib/api";
 import {
   getMetaConnectionsApi,
   getMetaOAuthUrlApi,
   syncMetaConnectionApi,
   deleteMetaConnectionApi,
+  getMetaAdAccountsApi,
+  syncMetaAdAccountCampaignsApi,
 } from "../../lib/metaApi";
 
 const initialConnectionTabs = ["Connected Accounts"];
@@ -106,6 +110,7 @@ export default function MetaConnections() {
 
   const [query, setQuery] = useState("");
   const [connections, setConnections] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [activeTab, setActiveTab] = useState(initialConnectionTabs[0]);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -117,9 +122,15 @@ export default function MetaConnections() {
       setLoading(true);
       setError("");
 
-      const res = await getMetaConnectionsApi();
+      const [connectionsRes, brandsRes] = await Promise.all([
+        getMetaConnectionsApi(),
+        getBrandsApi(),
+      ]);
 
-      const mapped = (res.items || []).map((item) => {
+      const brandList = brandsRes?.brands || brandsRes?.data || brandsRes || [];
+      setBrands(Array.isArray(brandList) ? brandList : []);
+
+      const mapped = (connectionsRes.items || []).map((item) => {
         const pagesCount = Number(item.meta_pages?.[0]?.count || 0);
         const igCount = Number(item.meta_instagram_accounts?.[0]?.count || 0);
         const adCount = Number(item.meta_ad_accounts?.[0]?.count || 0);
@@ -205,7 +216,87 @@ export default function MetaConnections() {
     }
   };
 
-  const totalAssets = connections.reduce((sum, item) => sum + Number(item.assets || 0), 0);
+  const handleSyncCampaigns = async (connection) => {
+    try {
+      setActionLoadingId(`campaign-sync-${connection.id}`);
+
+      const brandsAvailable = brands || [];
+      if (!brandsAvailable.length) {
+        throw new Error("No brands found. Create or assign a brand first.");
+      }
+
+      const adAccountsRes = await getMetaAdAccountsApi(connection.id);
+      const adAccounts = adAccountsRes?.items || [];
+
+      if (!adAccounts.length) {
+        throw new Error(
+          "No Meta ad accounts found for this connection. Reconnect Meta with ads permissions or verify account access."
+        );
+      }
+
+      const brandOptionsText = brandsAvailable
+        .map((brand, index) => `${index + 1}. ${brand.name}`)
+        .join("\n");
+
+      const brandChoice = window.prompt(
+        `Select brand number for sync:\n\n${brandOptionsText}`
+      );
+
+      if (!brandChoice) return;
+
+      const brandIndex = Number(brandChoice) - 1;
+      const selectedBrand = brandsAvailable[brandIndex];
+
+      if (!selectedBrand?.id) {
+        throw new Error("Invalid brand selection.");
+      }
+
+      const adOptionsText = adAccounts
+        .map(
+          (account, index) =>
+            `${index + 1}. ${account.name || "Meta Ad Account"} (${account.ad_account_id})`
+        )
+        .join("\n");
+
+      const adChoice = window.prompt(
+        `Select ad account number to sync campaigns:\n\n${adOptionsText}`
+      );
+
+      if (!adChoice) return;
+
+      const adIndex = Number(adChoice) - 1;
+      const selectedAdAccount = adAccounts[adIndex];
+
+      if (!selectedAdAccount?.ad_account_id) {
+        throw new Error("Invalid ad account selection.");
+      }
+
+      const result = await syncMetaAdAccountCampaignsApi(
+        selectedAdAccount.ad_account_id,
+        {
+          brandId: selectedBrand.id,
+          connectionId: connection.id,
+        }
+      );
+
+      alert(
+        result?.message ||
+          "Meta campaigns and ad sets synced successfully."
+      );
+
+      setOpenMenuId(null);
+      navigate("/campaigns");
+    } catch (err) {
+      alert(err.message || "Campaign sync failed");
+    } finally {
+      setActionLoadingId("");
+    }
+  };
+
+  const totalAssets = connections.reduce(
+    (sum, item) => sum + Number(item.assets || 0),
+    0
+  );
 
   const connectionStats = [
     {
@@ -417,6 +508,9 @@ export default function MetaConnections() {
                                   {item.name}
                                 </p>
                                 <p className="mt-1 text-xs text-slate-500">ID: {item.id}</p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  Pages: {item.pagesCount} • IG: {item.igCount} • Ad Accounts: {item.adCount}
+                                </p>
                               </div>
                             </div>
                           </td>
@@ -480,13 +574,23 @@ export default function MetaConnections() {
                             </div>
 
                             {openMenuId === item.id && (
-                              <div className="absolute right-8 top-[72px] z-20 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111111]">
+                              <div className="absolute right-8 top-[72px] z-20 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#111111]">
                                 <button
                                   onClick={() => handleSync(item.id)}
                                   className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                                 >
                                   <RefreshCcw size={16} />
-                                  {actionLoadingId === `sync-${item.id}` ? "Syncing..." : "Sync Now"}
+                                  {actionLoadingId === `sync-${item.id}` ? "Syncing..." : "Sync Pages / IG"}
+                                </button>
+
+                                <button
+                                  onClick={() => handleSyncCampaigns(item)}
+                                  className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                                >
+                                  <Megaphone size={16} />
+                                  {actionLoadingId === `campaign-sync-${item.id}`
+                                    ? "Syncing Campaigns..."
+                                    : "Sync Campaigns / Ad Sets"}
                                 </button>
 
                                 <button
@@ -609,7 +713,7 @@ export default function MetaConnections() {
                   <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
                     Manual + On Demand
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Use Sync Now on any active Meta connection.</p>
+                  <p className="mt-1 text-xs text-slate-500">Use Sync actions on any active Meta connection.</p>
                 </div>
               </div>
             </div>

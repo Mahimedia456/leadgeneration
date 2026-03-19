@@ -23,10 +23,13 @@ export async function getMetaConnectionsApi() {
 }
 
 export async function syncMetaConnectionApi(connectionId) {
-  return apiFetch(`/api/meta/connections/${encodeURIComponent(connectionId)}/sync`, {
-    method: "POST",
-    auth: true,
-  });
+  return apiFetch(
+    `/api/meta/connections/${encodeURIComponent(connectionId)}/sync`,
+    {
+      method: "POST",
+      auth: true,
+    }
+  );
 }
 
 export async function deleteMetaConnectionApi(connectionId) {
@@ -58,8 +61,69 @@ export async function getMetaInstagramAccountsApi() {
 }
 
 export async function getMetaInstagramDetailApi(accountId) {
-  return apiFetch(`/api/meta/instagram-accounts/${encodeURIComponent(accountId)}`, {
+  return apiFetch(
+    `/api/meta/instagram-accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: "GET",
+      auth: true,
+    }
+  );
+}
+
+/* ---------------- Meta Ads Manager ---------------- */
+
+export async function getMetaAdAccountsApi(connectionId = "") {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(`/api/meta/ad-accounts${query}`, {
     method: "GET",
     auth: true,
   });
+}
+
+export async function getMetaAdAccountCampaignsApi(
+  adAccountId,
+  connectionId = ""
+) {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/campaigns${query}`,
+    {
+      method: "GET",
+      auth: true,
+    }
+  );
+}
+
+export async function getMetaAdAccountAdSetsApi(
+  adAccountId,
+  connectionId = ""
+) {
+  const query = connectionId
+    ? `?connectionId=${encodeURIComponent(connectionId)}`
+    : "";
+
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/adsets${query}`,
+    {
+      method: "GET",
+      auth: true,
+    }
+  );
+}
+
+export async function syncMetaAdAccountCampaignsApi(adAccountId, payload) {
+  return apiFetch(
+    `/api/meta/ad-accounts/${encodeURIComponent(adAccountId)}/sync-campaigns`,
+    {
+      method: "POST",
+      auth: true,
+      body: payload,
+    }
+  );
 }
