@@ -1,71 +1,103 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../../layouts/AppShell";
 import {
   ArrowLeft,
-  Bell,
   Download,
   Upload,
   Building2,
   BadgeCheck,
-  CalendarDays,
   Copy,
   Star,
 } from "lucide-react";
+import { getMetaLeadDetailApi } from "../../lib/metaApi";
 
-const leadData = [
-  {
-    id: "LD-1001",
-    profileId: "#88291",
-    name: "Jonathan Vance",
-    priority: "High Priority",
-    role: "Senior Decision Maker",
-    company: "TechCorp Solutions",
-    campaign: "Google Search Campaign",
-    segment: "Q4 Target",
-    email: "j.vance@techcorp.com",
-    phone: "+1 (555) 902-8821",
-    jobTitle: "VP of Operations",
-    manager: "Sarah Miller",
-    region: "North America (West)",
+function formatDate(value) {
+  if (!value) return "--";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+}
+
+function buildLeadView(row) {
+  const payload = row?.payload || {};
+  const fullName =
+    row?.full_name ||
+    payload.full_name ||
+    `${payload.first_name || ""} ${payload.last_name || ""}`.trim() ||
+    "Unnamed Lead";
+
+  return {
+    id: row?.id || "",
+    profileId: row?.meta_lead_id || "",
+    name: fullName,
+    priority: "Meta Lead",
+    role: payload.job_title || payload.job || "Lead Form Submission",
+    company: payload.company_name || payload.company || "Unknown Company",
+    campaign: row?.meta_campaign_id || "Meta Campaign",
+    segment: row?.meta_form_id || "Lead Form",
+    email: row?.email || payload.email || "",
+    phone: row?.phone || payload.phone_number || "",
+    jobTitle: payload.job_title || payload.job_title_text || "Not provided",
+    manager: "Unassigned",
+    region: payload.city || payload.country || "Unknown Region",
     grade: 4,
-    sourceChannel: "Google Ads",
-    campaignName: "Enterprise_Cloud_2023_Q4",
-    conversionPage: "/solutions/enterprise-cloud",
-    utmMedium: "cpc",
-    utmTerm: "enterprise-crm-software",
-    node: "192.168.1.45",
-  },
-];
-
-const payloadRows = [
-  { field: "Employee Count", value: "500 - 1,000" },
-  { field: "Current CRM", value: "Legacy In-house System" },
-  { field: "Urgency Level", value: "Immediate", tone: "urgent" },
-  {
-    field: "Primary Goal",
-    value: "Workflow automation and cross-departmental reporting",
-  },
-];
-
-const notesSeed = [
-  {
-    author: "Sarah Miller",
-    time: "Yesterday, 4:12 PM",
-    text: "Client mentioned they are looking to migrate within 3 months. Needs a demo scheduled for next week.",
-  },
-];
+    sourceChannel: "Meta Lead Ads",
+    campaignName: row?.meta_campaign_id || "Meta Campaign",
+    conversionPage: payload.page_name || payload.form_name || "Lead Form",
+    utmMedium: payload.utm_medium || "meta",
+    utmTerm: payload.utm_term || "",
+    node: row?.meta_form_id || "",
+    payload,
+    createdTime: row?.created_time || row?.created_at || "",
+  };
+}
 
 export default function LeadsDetail() {
   const navigate = useNavigate();
   const { leadId } = useParams();
-  const lead = useMemo(
-    () => leadData.find((item) => item.id === leadId) || leadData[0],
-    [leadId]
-  );
 
+  const [lead, setLead] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [noteText, setNoteText] = useState("");
-  const [notes, setNotes] = useState(notesSeed);
+  const [notes, setNotes] = useState([
+    {
+      author: "System",
+      time: "Just now",
+      text: "Lead detail loaded from Meta lead sync.",
+    },
+  ]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        const data = await getMetaLeadDetailApi(leadId);
+        if (!active) return;
+        setLead(buildLeadView(data));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [leadId]);
+
+  const payloadRows = useMemo(() => {
+    return Object.entries(lead?.payload || {}).map(([field, value]) => ({
+      field,
+      value: Array.isArray(value) ? value.join(", ") : String(value ?? ""),
+      tone: String(value || "").toLowerCase().includes("urgent") ? "urgent" : "",
+    }));
+  }, [lead]);
 
   const handlePostNote = () => {
     const value = noteText.trim();
@@ -73,7 +105,7 @@ export default function LeadsDetail() {
 
     setNotes((prev) => [
       {
-        author: "Alexander Chen",
+        author: "Workspace User",
         time: "Just now",
         text: value,
       },
@@ -81,6 +113,43 @@ export default function LeadsDetail() {
     ]);
     setNoteText("");
   };
+
+  const handleDownloadJson = () => {
+    if (!lead) return;
+
+    const blob = new Blob([JSON.stringify(lead.payload || {}, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lead-${lead.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="app-panel rounded-[2rem] p-8 text-sm text-slate-500 dark:text-slate-400">
+          Loading lead detail...
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!lead) {
+    return (
+      <AppShell>
+        <div className="app-panel rounded-[2rem] p-8 text-sm text-slate-500 dark:text-slate-400">
+          Lead not found.
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -98,7 +167,9 @@ export default function LeadsDetail() {
         <div className="app-panel overflow-hidden rounded-[2rem] p-8">
           <div className="flex flex-col gap-8 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-col gap-6 md:flex-row md:items-center">
-              <div className="h-32 w-32 rounded-3xl border border-slate-200 bg-slate-200 shadow-xl dark:border-white/10 dark:bg-white/[0.06]" />
+              <div className="flex h-32 w-32 items-center justify-center rounded-3xl border border-slate-200 bg-slate-200 text-3xl font-black text-slate-600 shadow-xl dark:border-white/10 dark:bg-white/[0.06] dark:text-white">
+                {(lead.name || "L").slice(0, 1).toUpperCase()}
+              </div>
 
               <div>
                 <div className="mb-2 flex items-center gap-4">
@@ -138,7 +209,10 @@ export default function LeadsDetail() {
                 </button>
 
                 <div className="flex gap-2">
-                  <button className="auth-outline-btn flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold">
+                  <button
+                    onClick={handleDownloadJson}
+                    className="auth-outline-btn flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold"
+                  >
                     <Download size={14} />
                     Download
                   </button>
@@ -185,10 +259,15 @@ export default function LeadsDetail() {
                         Email Address
                       </p>
                       <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                        {lead.email}
-                        <button className="text-blue-500">
-                          <Copy size={14} />
-                        </button>
+                        {lead.email || "--"}
+                        {lead.email ? (
+                          <button
+                            onClick={() => navigator.clipboard.writeText(lead.email)}
+                            className="text-blue-500"
+                          >
+                            <Copy size={14} />
+                          </button>
+                        ) : null}
                       </p>
                     </div>
 
@@ -197,7 +276,7 @@ export default function LeadsDetail() {
                         Phone Number
                       </p>
                       <p className="text-sm font-bold text-slate-900 dark:text-white">
-                        {lead.phone}
+                        {lead.phone || "--"}
                       </p>
                     </div>
 
@@ -298,7 +377,7 @@ export default function LeadsDetail() {
 
                   <div className="space-y-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      Conversion Page
+                      Conversion Page / Form
                     </p>
                     <p className="cursor-pointer text-sm font-bold text-blue-600 dark:text-blue-400">
                       {lead.conversionPage}
@@ -322,13 +401,13 @@ export default function LeadsDetail() {
                         UTM Term
                       </p>
                       <p className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-mono text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white">
-                        {lead.utmTerm}
+                        {lead.utmTerm || "--"}
                       </p>
                     </div>
                   </div>
 
                   <span className="text-[10px] font-bold uppercase tracking-widest italic text-slate-500">
-                    Node: {lead.node}
+                    Form ID: {lead.node || "--"}
                   </span>
                 </div>
               </div>
@@ -375,6 +454,17 @@ export default function LeadsDetail() {
                         </td>
                       </tr>
                     ))}
+
+                    {!payloadRows.length && (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="px-8 py-8 text-center text-sm text-slate-500 dark:text-slate-400"
+                        >
+                          No payload fields found.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -393,20 +483,20 @@ export default function LeadsDetail() {
                   {[
                     {
                       title: "Inbound Lead Created",
-                      time: "2h ago",
-                      desc: "Form submitted via Landing Page A.",
+                      time: formatDate(lead.createdTime),
+                      desc: "Lead was submitted from Meta lead ad form.",
                       tone: "blue",
                     },
                     {
-                      title: "Email Sent",
-                      time: "1h ago",
-                      desc: `Auto-responder: "Welcome to TechCorp" sent.`,
+                      title: "Payload Synced",
+                      time: "Just now",
+                      desc: "Lead payload saved into local workspace database.",
                       tone: "slate",
                     },
                     {
-                      title: "Status Escalated",
-                      time: "45m ago",
-                      desc: `Lead marked "High Priority" by AI Engine.`,
+                      title: "Ready for Follow-up",
+                      time: "Now",
+                      desc: "Lead is available for export, review and routing.",
                       tone: "amber",
                     },
                   ].map((item, index) => (

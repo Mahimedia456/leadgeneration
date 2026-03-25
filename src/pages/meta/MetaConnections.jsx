@@ -23,6 +23,7 @@ import {
   Facebook,
   Instagram,
   Megaphone,
+  UserRoundSearch,
 } from "lucide-react";
 import { getBrandsApi } from "../../lib/api";
 import {
@@ -32,6 +33,7 @@ import {
   deleteMetaConnectionApi,
   getMetaAdAccountsApi,
   syncMetaAdAccountCampaignsApi,
+  syncMetaLeadsApi,
 } from "../../lib/metaApi";
 
 const initialConnectionTabs = ["Connected Accounts"];
@@ -280,14 +282,33 @@ export default function MetaConnections() {
       );
 
       alert(
-        result?.message ||
-          "Meta campaigns and ad sets synced successfully."
+        result?.message || "Meta campaigns and ad sets synced successfully."
       );
 
       setOpenMenuId(null);
       navigate("/campaigns");
     } catch (err) {
       alert(err.message || "Campaign sync failed");
+    } finally {
+      setActionLoadingId("");
+    }
+  };
+
+  const handleSyncLeads = async (connection) => {
+    try {
+      setActionLoadingId(`lead-sync-${connection.id}`);
+
+      const result = await syncMetaLeadsApi(connection.id);
+
+      alert(
+        result?.message ||
+          `Meta leads synced successfully. Inserted: ${result?.inserted || 0}`
+      );
+
+      setOpenMenuId(null);
+      navigate("/leads");
+    } catch (err) {
+      alert(err.message || "Lead sync failed");
     } finally {
       setActionLoadingId("");
     }
@@ -594,6 +615,16 @@ export default function MetaConnections() {
                                 </button>
 
                                 <button
+                                  onClick={() => handleSyncLeads(item)}
+                                  className="flex w-full items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                                >
+                                  <UserRoundSearch size={16} />
+                                  {actionLoadingId === `lead-sync-${item.id}`
+                                    ? "Syncing Leads..."
+                                    : "Sync Meta Leads"}
+                                </button>
+
+                                <button
                                   onClick={() => {
                                     setOpenMenuId(null);
                                     navigate("/meta/pages");
@@ -713,7 +744,9 @@ export default function MetaConnections() {
                   <p className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
                     Manual + On Demand
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Use Sync actions on any active Meta connection.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Use Sync actions on any active Meta connection.
+                  </p>
                 </div>
               </div>
             </div>

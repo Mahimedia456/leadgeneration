@@ -127,3 +127,35 @@ export async function syncMetaAdAccountCampaignsApi(adAccountId, payload) {
     }
   );
 }
+
+/* ---------------- Meta Leads Manager ---------------- */
+
+
+
+export async function syncMetaLeadsApi(connectionId) {
+  return apiFetch(`/api/meta/leads/sync/${connectionId}`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+export async function getMetaLeadsApi(workspaceId) {
+  return apiFetch(`/api/meta/leads?workspaceId=${workspaceId}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function getMetaLeadDetailApi(leadId) {
+  return apiFetch(`/api/meta/leads/${leadId}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
+export async function exportMetaLeadsApi(workspaceId) {
+  return apiFetch(`/api/meta/leads-export?workspaceId=${workspaceId}`, {
+    method: "GET",
+    auth: true,
+  });
+}

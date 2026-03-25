@@ -19,6 +19,12 @@ import {
   getMetaAdAccountCampaigns,
   getMetaAdAccountAdSets,
   syncMetaAdAccountCampaigns,
+
+  // Meta Leads
+  syncMetaLeads,
+  getMetaLeads,
+  getMetaLeadDetail,
+  exportMetaLeads,
 } from "../controllers/meta.controller.js";
 
 const router = Router();
@@ -44,18 +50,13 @@ router.get("/instagram-accounts/:accountId", requireAuth, getMetaInstagramDetail
 router.get("/ad-accounts", requireAuth, getMetaAdAccounts);
 router.get("/ad-accounts/:adAccountId/campaigns", requireAuth, getMetaAdAccountCampaigns);
 router.get("/ad-accounts/:adAccountId/adsets", requireAuth, getMetaAdAccountAdSets);
-
-/*
-  Sync Meta campaigns + adsets into local DB tables:
-  body:
-  {
-    "workspaceId": "...",
-    "brandId": "...",
-    "connectionId": "optional",
-    "adAccountId": "act_123456789"
-  }
-*/
 router.post("/ad-accounts/:adAccountId/sync-campaigns", requireAuth, syncMetaAdAccountCampaigns);
+
+/* Meta Leads */
+router.post("/leads/sync/:connectionId", requireAuth, syncMetaLeads);
+router.get("/leads", requireAuth, getMetaLeads);
+router.get("/leads/export", requireAuth, exportMetaLeads);
+router.get("/leads/:leadId", requireAuth, getMetaLeadDetail);
 
 /* Webhook */
 router.get("/webhook", verifyMetaWebhook);

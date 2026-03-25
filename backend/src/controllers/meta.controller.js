@@ -1168,6 +1168,152 @@ export async function syncMetaAdAccountCampaigns(req, res, next) {
   }
 }
 
+export async function syncMetaLeads(req, res) {
+  try {
+    const { connectionId } = req.params;
+
+    const { data: conn } = await supabase
+      .from("meta_connections")
+      .select("*")
+      .eq("id", connectionId)
+      .single();
+
+    if (!conn) throw new Error("Connection not found");
+
+    const accessToken = conn.user_access_token; // ✅ CORRECT TOKEN
+
+    // STEP 1: GET FORMS
+    const formsRes = await fetch(
+      `https://graph.facebook.com/v19.0/${conn.page_id}/leadgen_forms?access_token=${accessToken}`
+    );
+
+    const formsJson = await formsRes.json();
+
+    if (!formsJson.data) return res.json({ success: true, inserted: 0 });
+
+    let inserted = 0;
+
+    for (const form of formsJson.data) {
+      // STEP 2: GET LEADS
+      const leadsRes = await fetch(
+        `https://graph.facebook.com/v19.0/${form.id}/leads?access_token=${accessToken}`
+      );
+
+      const leadsJson = await leadsRes.json();
+
+      if (!leadsJson.data) continue;
+
+      for (const lead of leadsJson.data) {
+        const fieldMap = {};
+
+        lead.field_data?.forEach((f) => {
+          fieldMap[f.name] = f.values?.[0];
+        });
+
+        const fullName =
+          fieldMap.full_name ||
+          `${fieldMap.first_name || ""} ${fieldMap.last_name || ""}`.trim();
+
+        const email = fieldMap.email || null;
+        const phone = fieldMap.phone_number || null;
+
+        const { error } = await supabase
+          .from("meta_leads")
+          .upsert({
+            workspace_id: conn.workspace_id,
+            connection_id: conn.id,
+
+            meta_lead_id: lead.id,
+            meta_form_id: form.id,
+
+            full_name: fullName,
+            email,
+            phone,
+
+            payload: fieldMap,
+            created_time: lead.created_time,
+          });
+
+        if (!error) inserted++;
+      }
+    }
+
+    res.json({ success: true, inserted });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getMetaLeads(req, res) {
+  try {
+    const { workspaceId } = req.query;
+
+    const { data, error } = await supabase
+      .from("meta_leads")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_time", { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+
+export async function getMetaLeadDetail(req, res) {
+  try {
+    const { leadId } = req.params;
+
+    const { data, error } = await supabase
+      .from("meta_leads")
+      .select("*")
+      .eq("id", leadId)
+      .single();
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+
+export async function exportMetaLeads(req, res) {
+  try {
+    const { workspaceId } = req.query;
+
+    const { data } = await supabase
+      .from("meta_leads")
+      .select("*")
+      .eq("workspace_id", workspaceId);
+
+    const rows = data.map((l) => ({
+      Name: l.full_name,
+      Email: l.email,
+      Phone: l.phone,
+      Created: l.created_time,
+    }));
+
+    const csv =
+      "Name,Email,Phone,Created\n" +
+      rows
+        .map((r) =>
+          `${r.Name || ""},${r.Email || ""},${r.Phone || ""},${r.Created || ""}`
+        )
+        .join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 export function verifyMetaWebhook(req, res) {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
